@@ -126,16 +126,17 @@ class FileAttachment {
     }
   }
 
-  bool get isImage => mimeType.startsWith('image/');
-  bool get isVideo => mimeType.startsWith('video/');
-  bool get isAudio => mimeType.startsWith('audio/');
+  bool get isImage => mimeType.isNotEmpty && mimeType.startsWith('image/');
+  bool get isVideo => mimeType.isNotEmpty && mimeType.startsWith('video/');
+  bool get isAudio => mimeType.isNotEmpty && mimeType.startsWith('audio/');
   bool get isDocument =>
-      mimeType.contains('pdf') ||
-      mimeType.contains('document') ||
-      mimeType.contains('text') ||
-      mimeType.contains('word') ||
-      mimeType.contains('excel') ||
-      mimeType.contains('powerpoint');
+      mimeType.isNotEmpty &&
+      (mimeType.contains('pdf') ||
+          mimeType.contains('document') ||
+          mimeType.contains('text') ||
+          mimeType.contains('word') ||
+          mimeType.contains('excel') ||
+          mimeType.contains('powerpoint'));
 
   // Copy with method for updates
   FileAttachment copyWith({

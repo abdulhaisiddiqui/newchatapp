@@ -14,8 +14,8 @@ class BottomNavScreen extends StatefulWidget {
 }
 
 class _BottomNavScreenState extends State<BottomNavScreen> {
-  int currentIndex=0;
-  List<Widget>pages=[
+  int currentIndex = 0;
+  List<Widget> pages = [
     HomePage(),
     CallScreen(),
     ContactScreen(),
@@ -24,24 +24,37 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: currentIndex,
-        children: pages,
-      ),
+      body: IndexedStack(index: currentIndex, children: pages),
       bottomNavigationBar: BottomNavigationBar(
         selectedItemColor: Colors.green,
         unselectedItemColor: Colors.grey,
         showUnselectedLabels: true,
         items: [
-        BottomNavigationBarItem(icon: UiHelper.CustomImage(img: "assets/images/Message.png"),label: "Mssage"),
-        BottomNavigationBarItem(icon: UiHelper.CustomImage(img: "assets/images/call.png"),label: "Calls"),
-        BottomNavigationBarItem(icon: UiHelper.CustomImage(img: "assets/images/user.png"),label: "Contacts"),
-        BottomNavigationBarItem(icon: UiHelper.CustomImage(img: "assets/images/settings.png"),label:"Settings"),
-      ],type: BottomNavigationBarType.fixed,currentIndex: currentIndex,onTap: (index){
-        setState(() {
-          currentIndex=index;
-        });
-      },),
+          BottomNavigationBarItem(
+            icon: UiHelper.CustomImage(img: "Message.png"),
+            label: "Mssage",
+          ),
+          BottomNavigationBarItem(
+            icon: UiHelper.CustomImage(img: "call.png"),
+            label: "Calls",
+          ),
+          BottomNavigationBarItem(
+            icon: UiHelper.CustomImage(img: "user.png"),
+            label: "Contacts",
+          ),
+          BottomNavigationBarItem(
+            icon: UiHelper.CustomImage(img: "settings.png"),
+            label: "Settings",
+          ),
+        ],
+        type: BottomNavigationBarType.fixed,
+        currentIndex: currentIndex,
+        onTap: (index) {
+          setState(() {
+            currentIndex = index;
+          });
+        },
+      ),
     );
   }
 }

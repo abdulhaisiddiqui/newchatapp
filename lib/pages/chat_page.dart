@@ -101,7 +101,11 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   String _getChatRoomId() {
-    List<String> ids = [_firebaseAuth.currentUser!.uid, widget.receiverUserId];
+    final currentUser = _firebaseAuth.currentUser;
+    if (currentUser == null) {
+      throw Exception('User not authenticated');
+    }
+    List<String> ids = [currentUser.uid, widget.receiverUserId];
     ids.sort();
     return ids.join("_");
   }
@@ -148,7 +152,7 @@ class _ChatPageState extends State<ChatPage> {
               onPressed: () => Navigator.pop(context),
             ),
             const CircleAvatar(
-              backgroundImage: AssetImage('assets/images/profile-image.png'),
+              backgroundImage: AssetImage('assets/images/user.png'),
               radius: 20,
             ),
             const SizedBox(width: 10),
@@ -271,17 +275,48 @@ class _ChatPageState extends State<ChatPage> {
 
   // 🔹 Firestore Messages
   Widget _buildMessageList() {
+    final currentUser = _firebaseAuth.currentUser;
+    if (currentUser == null) {
+      return const Center(child: Text('Please log in to view messages'));
+    }
+
     return StreamBuilder(
-      stream: _chatService.getMessages(
-        widget.receiverUserId,
-        _firebaseAuth.currentUser!.uid,
-      ),
+      stream: _chatService.getMessages(widget.receiverUserId, currentUser.uid),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return Text('Error ${snapshot.error}');
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error, color: Colors.red, size: 48),
+                const SizedBox(height: 16),
+                Text('Error loading messages: ${snapshot.error}'),
+                const SizedBox(height: 8),
+                ElevatedButton(
+                  onPressed: () => setState(() {}),
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          );
         }
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.chat_bubble_outline, size: 48, color: Colors.grey),
+                SizedBox(height: 16),
+                Text('No messages yet'),
+                SizedBox(height: 8),
+                Text('Start the conversation!'),
+              ],
+            ),
+          );
         }
 
         return ListView(
@@ -296,8 +331,19 @@ class _ChatPageState extends State<ChatPage> {
 
   // 🔹 Firestore Single Message
   Widget _buildMessageItem(DocumentSnapshot document) {
-    Map<String, dynamic> data = document.data() as Map<String, dynamic>;
-    bool isCurrentUser = data['senderId'] == _firebaseAuth.currentUser!.uid;
+    final docData = document.data();
+    if (docData == null) {
+      return const SizedBox.shrink(); // Skip invalid documents
+    }
+
+    Map<String, dynamic> data = docData as Map<String, dynamic>;
+
+    final currentUser = _firebaseAuth.currentUser;
+    if (currentUser == null) {
+      return const SizedBox.shrink(); // Don't show messages if user not authenticated
+    }
+
+    bool isCurrentUser = data['senderId'] == currentUser.uid;
 
     // Convert Firestore data to Message object
     Message message = Message.fromMap(data);

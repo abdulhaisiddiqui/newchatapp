@@ -7,9 +7,13 @@ class SettingScreen extends StatelessWidget {
   const SettingScreen({super.key});
 
   Future<Map<String, dynamic>?> _getUserData() async {
-    final uid = FirebaseAuth.instance.currentUser!.uid;
-    final snapshot =
-    await FirebaseFirestore.instance.collection("users").doc(uid).get();
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return null;
+    final uid = currentUser.uid;
+    final snapshot = await FirebaseFirestore.instance
+        .collection("users")
+        .doc(uid)
+        .get();
 
     if (snapshot.exists) {
       return snapshot.data();
@@ -63,7 +67,8 @@ class SettingScreen extends StatelessWidget {
 
                   final userData = snapshot.data!;
                   final username = userData["username"] ?? userData["email"];
-                  final profilePic = userData["profilePic"] ??
+                  final profilePic =
+                      userData["profilePic"] ??
                       "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQxSFDJsQuUfNJriz0KiaTD28GR82xL1fW-nvsEF9GwaI_sq6SkPloo&usqp=CAE&s"; // default avatar
 
                   return ListView(
@@ -71,7 +76,9 @@ class SettingScreen extends StatelessWidget {
                     children: [
                       Padding(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 20),
+                          horizontal: 20,
+                          vertical: 20,
+                        ),
                         child: Row(
                           children: [
                             CircleAvatar(
@@ -112,22 +119,39 @@ class SettingScreen extends StatelessWidget {
 
                             IconButton(
                               onPressed: () {},
-                              icon: const Icon(Icons.qr_code,
-                                  color: Colors.green),
-                            )
+                              icon: const Icon(
+                                Icons.qr_code,
+                                color: Colors.green,
+                              ),
+                            ),
                           ],
                         ),
                       ),
-                      buildSettingsTile(Icons.key, "Account",
-                          "Privacy, security, change number"),
-                      buildSettingsTile(Icons.chat, "Chat",
-                          "Chat history, theme, wallpapers"),
-                      buildSettingsTile(Icons.notifications, "Notifications",
-                          "Messages, group and others"),
-                      buildSettingsTile(Icons.help_outline, "Help",
-                          "Help center, contact us, privacy policy"),
-                      buildSettingsTile(Icons.storage, "Storage and data",
-                          "Network usage, storage usage"),
+                      buildSettingsTile(
+                        Icons.key,
+                        "Account",
+                        "Privacy, security, change number",
+                      ),
+                      buildSettingsTile(
+                        Icons.chat,
+                        "Chat",
+                        "Chat history, theme, wallpapers",
+                      ),
+                      buildSettingsTile(
+                        Icons.notifications,
+                        "Notifications",
+                        "Messages, group and others",
+                      ),
+                      buildSettingsTile(
+                        Icons.help_outline,
+                        "Help",
+                        "Help center, contact us, privacy policy",
+                      ),
+                      buildSettingsTile(
+                        Icons.storage,
+                        "Storage and data",
+                        "Network usage, storage usage",
+                      ),
                       buildSettingsTile(Icons.group_add, "Invite a friend", ""),
                     ],
                   );

@@ -31,16 +31,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }, SetOptions(merge: true));
     } catch (e) {
       debugPrint("Error updating $field: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed to update $field")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Failed to update $field")));
     }
   }
 
   // 🔹 Image picker
   Future<void> _pickImage() async {
-    final pickedFile =
-    await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 70);
+    final pickedFile = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 70,
+    );
 
     if (pickedFile != null) {
       setState(() {
@@ -69,14 +71,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
         "profilePic": downloadUrl,
       }, SetOptions(merge: true));
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Profile picture updated!")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Profile picture updated!")));
     } catch (e) {
       debugPrint("Error uploading profile picture: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Upload failed: $e")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Upload failed: $e")));
     } finally {
       setState(() => _isLoading = false);
     }
@@ -88,9 +90,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (user == null) {
       return Scaffold(
-        appBar: AppBar(
-          title: const Text("Profile"),
-        ),
+        appBar: AppBar(title: const Text("Profile")),
         body: const Center(child: Text("No user logged in")),
       );
     }
@@ -110,11 +110,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
               final Map<String, dynamic>? data = snapshot.data?.data();
 
-              final String email = (data?['email'] as String?) ??
-                  user.email ??
-                  "No Email";
+              final String email =
+                  (data?['email'] as String?) ?? user.email ?? "No Email";
               final String profilePic = (data?['profilePic'] as String?) ?? "";
-              final String username = (data?['username'] as String?) ??
+              final String username =
+                  (data?['username'] as String?) ??
                   (user.email != null
                       ? "@${user.email!.split('@')[0]}"
                       : "@${user.uid.substring(0, 6)}");
@@ -130,7 +130,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         Row(
                           children: [
                             IconButton(
-                              icon: const Icon(Icons.arrow_back, color: Colors.white),
+                              icon: const Icon(
+                                Icons.arrow_back,
+                                color: Colors.white,
+                              ),
                               onPressed: () => Navigator.pop(context),
                             ),
                           ],
@@ -148,8 +151,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 backgroundImage: _imageFile != null
                                     ? FileImage(_imageFile!) as ImageProvider
                                     : (profilePic.isNotEmpty
-                                    ? NetworkImage(profilePic)
-                                    : const AssetImage("assets/images/default_profile.png")),
+                                          ? NetworkImage(profilePic)
+                                          : const AssetImage(
+                                              "assets/images/user.png",
+                                            )),
                               ),
                               Container(
                                 decoration: BoxDecoration(
@@ -157,8 +162,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   shape: BoxShape.circle,
                                 ),
                                 padding: const EdgeInsets.all(6),
-                                child: const Icon(Icons.edit, color: Colors.white, size: 18),
-                              )
+                                child: const Icon(
+                                  Icons.edit,
+                                  color: Colors.white,
+                                  size: 18,
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -167,7 +176,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         Text(
                           username,
                           style: const TextStyle(
-                              fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -196,7 +208,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   // White editable fields
                   Expanded(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 15,
+                      ),
                       decoration: const BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.only(
@@ -261,7 +276,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(color: Colors.black54, fontSize: 14)),
+          Text(
+            label,
+            style: const TextStyle(color: Colors.black54, fontSize: 14),
+          ),
           const SizedBox(height: 5),
           TextFormField(
             initialValue: value,
@@ -276,7 +294,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               color: Colors.black,
             ),
           ),
-
         ],
       ),
     );

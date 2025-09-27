@@ -18,8 +18,12 @@ class ChatService extends ChangeNotifier {
   //SEND TEXT MESSAGES (Enhanced)
   Future<void> sendTextMessage(String receiverId, String message) async {
     //get current user info
-    final String currentUserId = _firebaseAuth.currentUser!.uid;
-    final String currentUserEmail = _firebaseAuth.currentUser!.email.toString();
+    final currentUser = _firebaseAuth.currentUser;
+    if (currentUser == null) {
+      throw Exception('User not authenticated');
+    }
+    final String currentUserId = currentUser.uid;
+    final String currentUserEmail = currentUser.email ?? 'unknown@example.com';
     final Timestamp timestamp = Timestamp.now();
 
     //create a new message
@@ -42,8 +46,12 @@ class ChatService extends ChangeNotifier {
     String? textMessage,
   }) async {
     //get current user info
-    final String currentUserId = _firebaseAuth.currentUser!.uid;
-    final String currentUserEmail = _firebaseAuth.currentUser!.email.toString();
+    final currentUser = _firebaseAuth.currentUser;
+    if (currentUser == null) {
+      throw Exception('User not authenticated');
+    }
+    final String currentUserId = currentUser.uid;
+    final String currentUserEmail = currentUser.email ?? 'unknown@example.com';
     final Timestamp timestamp = Timestamp.now();
 
     //create a new file message
@@ -69,8 +77,12 @@ class ChatService extends ChangeNotifier {
     FileAttachment? fileAttachment,
   }) async {
     //get current user info
-    final String currentUserId = _firebaseAuth.currentUser!.uid;
-    final String currentUserEmail = _firebaseAuth.currentUser!.email.toString();
+    final currentUser = _firebaseAuth.currentUser;
+    if (currentUser == null) {
+      throw Exception('User not authenticated');
+    }
+    final String currentUserId = currentUser.uid;
+    final String currentUserEmail = currentUser.email ?? 'unknown@example.com';
     final Timestamp timestamp = Timestamp.now();
 
     //create a new reply message
@@ -94,7 +106,11 @@ class ChatService extends ChangeNotifier {
     required String chatRoomId,
     required String newMessage,
   }) async {
-    final String currentUserId = _firebaseAuth.currentUser!.uid;
+    final currentUser = _firebaseAuth.currentUser;
+    if (currentUser == null) {
+      throw Exception('User not authenticated');
+    }
+    final String currentUserId = currentUser.uid;
 
     try {
       // Get the original message to verify ownership
@@ -138,7 +154,11 @@ class ChatService extends ChangeNotifier {
     required String messageId,
     required String chatRoomId,
   }) async {
-    final String currentUserId = _firebaseAuth.currentUser!.uid;
+    final currentUser = _firebaseAuth.currentUser;
+    if (currentUser == null) {
+      throw Exception('User not authenticated');
+    }
+    final String currentUserId = currentUser.uid;
 
     try {
       // Get the message to verify ownership and check for file attachments
@@ -236,11 +256,18 @@ class ChatService extends ChangeNotifier {
         .orderBy('timestamp', descending: false)
         .snapshots()
         .map((snapshot) {
-          return snapshot.docs.map((doc) {
-            Map<String, dynamic> data = doc.data();
-            data['id'] = doc.id; // Add document ID for editing/deleting
-            return Message.fromMap(data);
-          }).toList();
+          return snapshot.docs
+              .map((doc) {
+                Map<String, dynamic>? docData = doc.data();
+                if (docData == null) return null;
+
+                Map<String, dynamic> data = Map<String, dynamic>.from(docData);
+                data['id'] = doc.id; // Add document ID for editing/deleting
+                return Message.fromMap(data);
+              })
+              .where((message) => message != null)
+              .cast<Message>()
+              .toList();
         });
   }
 
@@ -287,6 +314,7 @@ class ChatService extends ChangeNotifier {
       QuerySnapshot snapshot = await messagesQuery.get();
 
       List<Message> messages = snapshot.docs
+          .where((doc) => doc.data() != null)
           .map((doc) => Message.fromMap(doc.data() as Map<String, dynamic>))
           .where(
             (message) =>
@@ -324,6 +352,7 @@ class ChatService extends ChangeNotifier {
       QuerySnapshot snapshot = await messagesQuery.get();
 
       List<FileAttachment> files = snapshot.docs
+          .where((doc) => doc.data() != null)
           .map((doc) => Message.fromMap(doc.data() as Map<String, dynamic>))
           .where((message) => message.fileAttachment != null)
           .map((message) => message.fileAttachment!)

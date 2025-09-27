@@ -97,7 +97,10 @@ class Message {
 
   @override
   String toString() {
-    return 'Message(senderId: $senderId, type: ${type.displayName}, hasFile: $hasFileAttachment, message: ${message.length > 50 ? '${message.substring(0, 50)}...' : message})';
+    final messagePreview = message.isNotEmpty && message.length > 50
+        ? '${message.substring(0, 50)}...'
+        : message;
+    return 'Message(senderId: $senderId, type: ${type.displayName}, hasFile: $hasFileAttachment, message: $messagePreview)';
   }
 
   @override

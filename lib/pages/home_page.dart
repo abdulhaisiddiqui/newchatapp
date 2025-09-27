@@ -2,7 +2,6 @@ import 'package:chatapp/services/auth/auth_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import 'package:chatapp/pages/bottomNav_screen.dart';
@@ -45,7 +44,7 @@ class _HomePageState extends State<HomePage> {
           Padding(
             padding: const EdgeInsets.only(right: 24),
             child: CircleAvatar(
-              backgroundImage: AssetImage('assets/images/profile-image.png'),
+              backgroundImage: AssetImage('assets/images/user.png'),
             ),
           ),
           IconButton(
@@ -61,35 +60,34 @@ class _HomePageState extends State<HomePage> {
             padding: const EdgeInsets.only(top: 30),
             child: Container(
               height: 110,
-              padding:
-              const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
               child: ListView(
                 scrollDirection: Axis.horizontal,
                 children: [
                   storyAvatar(
                     'My status',
-                    'assets/images/profile-image.png',
+                    'assets/images/user.png',
                     showOverlay: true,
                   ),
                   storyAvatar(
                     'Adil',
-                    'assets/images/adil.png',
+                    'assets/images/user.png',
                     bgColor: const Color(0xFFFFC746),
                     showOverlay: false,
                   ),
                   storyAvatar(
                     'Marina',
-                    'assets/images/alex.png',
+                    'assets/images/user.png',
                     bgColor: const Color(0xFFEDA0A8),
                   ),
                   storyAvatar(
                     'Dean',
-                    'assets/images/dean.png',
+                    'assets/images/user.png',
                     bgColor: const Color(0xFF98A1F1),
                   ),
                   storyAvatar(
                     'Max',
-                    'assets/images/max.png',
+                    'assets/images/user.png',
                     bgColor: const Color(0xFFFBDC94),
                     showOverlay: false,
                   ),
@@ -116,27 +114,39 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
-
     );
   }
 
   /// --- Firestore User List ---
   Widget _buildUserList() {
+    print('DEBUG: Building user list');
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('users').snapshots(),
       builder: (context, snapshots) {
+        print('DEBUG: StreamBuilder state: ${snapshots.connectionState}');
+        print('DEBUG: Has error: ${snapshots.hasError}');
+        print('DEBUG: Has data: ${snapshots.hasData}');
+
         if (snapshots.hasError) {
+          print('DEBUG: Error: ${snapshots.error}');
           return const Center(child: Text('Error'));
         }
         if (snapshots.connectionState == ConnectionState.waiting) {
+          print('DEBUG: Loading users...');
           return const Center(child: Text('Loading...'));
         }
 
+        if (snapshots.data == null) {
+          print('DEBUG: No data received');
+          return const Center(child: Text('No users found'));
+        }
+
+        final docs = snapshots.data!.docs;
+        print('DEBUG: Found ${docs.length} user documents');
+
         return ListView(
           padding: const EdgeInsets.only(top: 20),
-          children: snapshots.data!.docs
-              .map<Widget>((doc) => _buildUserListItem(doc))
-              .toList(),
+          children: docs.map<Widget>((doc) => _buildUserListItem(doc)).toList(),
         );
       },
     );
@@ -145,87 +155,60 @@ class _HomePageState extends State<HomePage> {
   Widget _buildUserListItem(DocumentSnapshot document) {
     Map<String, dynamic> data = document.data()! as Map<String, dynamic>;
 
-    // Skip current user
-    if (_auth.currentUser!.email == data['email']) {
-      return Container();
-    }
+    print('DEBUG: User document data: $data');
+
+    // Skip current user (temporarily disabled for testing)
+    final currentUser = _auth.currentUser;
+    print('DEBUG: Current user email: ${currentUser?.email}');
+
+    // TEMPORARILY DISABLED: Allow all users to be shown for testing
+    // if (currentUser == null) {
+    //   print('DEBUG: No current user, showing all users');
+    // } else if (currentUser.email == data['email']) {
+    //   print('DEBUG: Skipping current user: ${data['email']}');
+    //   return Container();
+    // }
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 16),
-      child: Slidable(
-        key: ValueKey(data['uid']),
-        endActionPane: ActionPane(
-          motion: const ScrollMotion(),
+      child: ListTile(
+        onTap: () {
+          final uid = data['uid'] ?? document.id; // Use document ID as fallback
+          final email =
+              data['email'] ?? 'test@example.com'; // Use fallback email
+          print(
+            'DEBUG: Tapped user - uid: $uid, email: $email, data keys: ${data.keys}',
+          );
+
+          print('DEBUG: Navigating to chat with uid: $uid, email: $email');
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) =>
+                  ChatPage(receiverUserEmail: email, receiverUserId: uid),
+            ),
+          );
+        },
+        title: Text(
+          data['username'] ?? data['email'],
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        ),
+        subtitle: const Text("Tap to chat", style: TextStyle(fontSize: 12)),
+        leading: Stack(
           children: [
-            CustomSlidableAction(
-              flex: 1,
-              onPressed: (context) {},
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 30,
-                    height: 30,
-                    decoration: const BoxDecoration(
-                      color: Colors.black,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.notifications,
-                        color: Colors.white, size: 18),
-                  ),
-                  const SizedBox(width: 20),
-                  Container(
-                    width: 30,
-                    height: 30,
-                    decoration: const BoxDecoration(
-                      color: Colors.red,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.delete,
-                        color: Colors.white, size: 18),
-                  ),
-                ],
+            CircleAvatar(
+              backgroundImage: NetworkImage(
+                data['profilePic'] ??
+                    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQxSFDJsQuUfNJriz0KiaTD28GR82xL1fW-nvsEF9GwaI_sq6SkPloo&usqp=CAE&s',
               ),
+              radius: 25,
+            ),
+            Positioned(
+              bottom: 0,
+              right: 0,
+              child: CircleAvatar(backgroundColor: Colors.green, radius: 6),
             ),
           ],
-        ),
-        child: ListTile(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ChatPage(
-                  receiverUserEmail: data['email'],
-                  receiverUserId: data['uid'],
-                ),
-              ),
-            );
-          },
-          title: Text(
-            data['username'] ?? data['email'],
-            style: const TextStyle(
-                fontWeight: FontWeight.bold, fontSize: 18),
-          ),
-          subtitle: const Text(
-            "Tap to chat",
-            style: TextStyle(fontSize: 12),
-          ),
-          leading: Stack(
-            children: [
-              CircleAvatar(
-                backgroundImage: NetworkImage(data['profilePic'] ?? 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQxSFDJsQuUfNJriz0KiaTD28GR82xL1fW-nvsEF9GwaI_sq6SkPloo&usqp=CAE&s'),
-                radius: 25,
-              ),
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: CircleAvatar(
-                  backgroundColor: Colors.green,
-                  radius: 6,
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );
@@ -233,11 +216,11 @@ class _HomePageState extends State<HomePage> {
 
   /// --- Story Avatar Widget ---
   Widget storyAvatar(
-      String name,
-      String imagePath, {
-        Color bgColor = Colors.grey,
-        bool showOverlay = false,
-      }) {
+    String name,
+    String imagePath, {
+    Color bgColor = Colors.grey,
+    bool showOverlay = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8.0),
       child: Column(
@@ -260,8 +243,7 @@ class _HomePageState extends State<HomePage> {
                   child: CircleAvatar(
                     radius: 10,
                     backgroundColor: Colors.white,
-                    child: const Icon(Icons.add,
-                        color: Colors.black, size: 14),
+                    child: const Icon(Icons.add, color: Colors.black, size: 14),
                   ),
                 ),
             ],

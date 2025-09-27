@@ -18,6 +18,9 @@
 15. [Approval Checkpoints](#approval-checkpoints)
 
 ## Project Overview
+yeah first stop running the app every secound fix the chat issue look 
+
+
 
 This document outlines the comprehensive implementation strategy for adding file sharing capabilities to the existing Flutter chat application. The enhancement will allow users to send and receive various file types including PDFs, documents, images, videos, and other media with secure handling, progress tracking, and inline preview functionality.
 
