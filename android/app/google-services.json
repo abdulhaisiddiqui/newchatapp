@@ -1,79 +1,26 @@
 {
   "project_info": {
-    "project_number": "940806540627",
-    "project_id": "chatbox-dd7b7",
-    "storage_bucket": "chatbox-dd7b7.firebasestorage.app"
+    "project_number": "93624205799",
+    "project_id": "baby-shop-hub-a04d1",
+    "storage_bucket": "baby-shop-hub-a04d1.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:940806540627:android:756fc5d72d93faf98765a6",
+        "mobilesdk_app_id": "1:93624205799:android:3920f77b4c567fdeb53d42",
         "android_client_info": {
           "package_name": "com.example.chatapp"
         }
       },
-      "oauth_client": [
-        {
-          "client_id": "940806540627-hckb9usdbcpaurhspn0lk2ff0ktmogg1.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
+      "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyBxLkhWXJBOfPGdwrlG3I77sPepTavzpHE"
+          "current_key": "AIzaSyB5vPtF80YreLTjnxj2DYuQ9gyZVR3f-Yk"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "940806540627-hckb9usdbcpaurhspn0lk2ff0ktmogg1.apps.googleusercontent.com",
-              "client_type": 3
-            },
-            {
-              "client_id": "940806540627-hb1kso1hm7d5vmjscsbqad023f2lfkqp.apps.googleusercontent.com",
-              "client_type": 2,
-              "ios_info": {
-                "bundle_id": "com.example.chatbox"
-              }
-            }
-          ]
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:940806540627:android:597ba894b64c6b258765a6",
-        "android_client_info": {
-          "package_name": "com.example.chatbox"
-        }
-      },
-      "oauth_client": [
-        {
-          "client_id": "940806540627-hckb9usdbcpaurhspn0lk2ff0ktmogg1.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
-      "api_key": [
-        {
-          "current_key": "AIzaSyBxLkhWXJBOfPGdwrlG3I77sPepTavzpHE"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "940806540627-hckb9usdbcpaurhspn0lk2ff0ktmogg1.apps.googleusercontent.com",
-              "client_type": 3
-            },
-            {
-              "client_id": "940806540627-hb1kso1hm7d5vmjscsbqad023f2lfkqp.apps.googleusercontent.com",
-              "client_type": 2,
-              "ios_info": {
-                "bundle_id": "com.example.chatbox"
-              }
-            }
-          ]
+          "other_platform_oauth_client": []
         }
       }
     }

@@ -53,10 +53,11 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyBxLkhWXJBOfPGdwrlG3I77sPepTavzpHE',
-    appId: '1:940806540627:android:756fc5d72d93faf98765a6',
-    messagingSenderId: '940806540627',
-    projectId: 'chatbox-dd7b7',
-    storageBucket: 'chatbox-dd7b7.firebasestorage.app',
+    apiKey: 'AIzaSyB5vPtF80YreLTjnxj2DYuQ9gyZVR3f-Yk',
+    appId: '1:93624205799:android:3920f77b4c567fdeb53d42',
+    messagingSenderId: '93624205799',
+    projectId: 'baby-shop-hub-a04d1',
+    storageBucket: 'baby-shop-hub-a04d1.firebasestorage.app',
   );
+
 }
