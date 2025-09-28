@@ -17,10 +17,7 @@ import 'package:flutter/foundation.dart'
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
-      throw UnsupportedError(
-        'DefaultFirebaseOptions have not been configured for web - '
-        'you can reconfigure this by running the FlutterFire CLI again.',
-      );
+      return web;
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
@@ -60,4 +57,12 @@ class DefaultFirebaseOptions {
     storageBucket: 'baby-shop-hub-a04d1.firebasestorage.app',
   );
 
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyB5vPtF80YreLTjnxj2DYuQ9gyZVR3f-Yk',
+    appId: '1:93624205799:web:3920f77b4c567fdeb53d42',
+    messagingSenderId: '93624205799',
+    projectId: 'baby-shop-hub-a04d1',
+    storageBucket: 'baby-shop-hub-a04d1.firebasestorage.app',
+    authDomain: 'baby-shop-hub-a04d1.firebaseapp.com',
+  );
 }

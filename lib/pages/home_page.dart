@@ -181,13 +181,21 @@ class _HomePageState extends State<HomePage> {
           );
 
           print('DEBUG: Navigating to chat with uid: $uid, email: $email');
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) =>
-                  ChatPage(receiverUserEmail: email, receiverUserId: uid),
-            ),
-          );
+          // Ensure we have valid data before navigating
+          if (uid != null && uid.isNotEmpty && email != null && email.isNotEmpty) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) =>
+                    ChatPage(receiverUserEmail: email, receiverUserId: uid),
+              ),
+            );
+          } else {
+            // Show error if navigation data is invalid
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Cannot open chat: Invalid user data')),
+            );
+          }
         },
         title: Text(
           data['username'] ?? data['email'],

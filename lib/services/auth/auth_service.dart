@@ -11,18 +11,42 @@ class AuthService extends ChangeNotifier{
 
   //sign user in
  Future<UserCredential> signInWithEmailOrPassword(String email, String password) async{
-   try{
-     UserCredential userCredential = await _firebaseAuth.signInWithEmailAndPassword(email: email, password: password);
-
-     //add a new document for the user in users collection if it doesn't already exists
-     _firestore.collection('users').doc(userCredential.user!.uid).set({
-       'uid': userCredential.user!.uid,
-       'email': email
-     },SetOptions(merge: true));
-     return userCredential;
+   if (email.isEmpty) {
+     throw FirebaseAuthException(
+       code: 'invalid-email',
+       message: 'Email cannot be empty',
+     );
    }
-   on FirebaseAuthException catch(e){
+   
+   if (password.isEmpty) {
+     throw FirebaseAuthException(
+       code: 'invalid-password',
+       message: 'Password cannot be empty',
+     );
+   }
+   
+   try{
+     UserCredential userCredential = await _firebaseAuth.signInWithEmailAndPassword(
+       email: email, 
+       password: password
+     );
+
+     // Update user data in Firestore
+     await _firestore.collection('users').doc(userCredential.user!.uid).set({
+       'uid': userCredential.user!.uid,
+       'email': email,
+       'lastLogin': Timestamp.now(),
+     }, SetOptions(merge: true));
+     
+     return userCredential;
+   } on FirebaseAuthException catch(e){
+     // Log the error for debugging
+     print('Authentication error: ${e.code} - ${e.message}');
      throw Exception(e.code);
+   } catch (e) {
+     // Handle other types of exceptions
+     print('Unexpected error during authentication: $e');
+     throw Exception('authentication-error');
    }
  }
 
