@@ -183,10 +183,8 @@ class ChatService extends ChangeNotifier {
 
       // If message has file attachment, delete the file too
       if (messageData['fileAttachment'] != null) {
-        FileAttachment fileAttachment = FileAttachment.fromMap(
-          messageData['fileAttachment'],
-        );
         // Note: File deletion would be handled by FileService
+        // FileAttachment fileAttachment = FileAttachment.fromMap(messageData['fileAttachment']);
         // await FileService().deleteFile(fileId: fileAttachment.fileId, chatRoomId: chatRoomId);
       }
 
@@ -256,18 +254,12 @@ class ChatService extends ChangeNotifier {
         .orderBy('timestamp', descending: false)
         .snapshots()
         .map((snapshot) {
-          return snapshot.docs
-              .map((doc) {
-                Map<String, dynamic>? docData = doc.data();
-                if (docData == null) return null;
-
-                Map<String, dynamic> data = Map<String, dynamic>.from(docData);
-                data['id'] = doc.id; // Add document ID for editing/deleting
-                return Message.fromMap(data);
-              })
-              .where((message) => message != null)
-              .cast<Message>()
-              .toList();
+          return snapshot.docs.map((doc) {
+            Map<String, dynamic> docData = doc.data();
+            Map<String, dynamic> data = Map<String, dynamic>.from(docData);
+            data['id'] = doc.id; // Add document ID for editing/deleting
+            return Message.fromMap(data);
+          }).toList();
         });
   }
 

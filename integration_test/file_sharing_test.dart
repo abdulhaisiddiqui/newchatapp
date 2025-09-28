@@ -60,18 +60,10 @@ void main() {
     });
 
     testWidgets('file picker button integration', (WidgetTester tester) async {
-      bool filesSelected = false;
-      List<File> selectedFiles = [];
-
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: ChatFilePickerButton(
-              onFilesSelected: (files) {
-                filesSelected = true;
-                selectedFiles = files;
-              },
-            ),
+            body: ChatFilePickerButton(onFilesSelected: (files) {}),
           ),
         ),
       );
@@ -151,14 +143,12 @@ void main() {
       WidgetTester tester,
     ) async {
       const int maxFiles = 5;
-      bool filesSelected = false;
 
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: ChatFilePickerButton(
               onFilesSelected: (files) {
-                filesSelected = true;
                 // In a real test, you would verify performance metrics here
               },
               maxFiles: maxFiles,

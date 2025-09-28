@@ -5,16 +5,13 @@ import 'package:image/image.dart' as img;
 import 'package:chatapp/services/file/file_service.dart';
 import 'package:chatapp/services/file/file_security_service.dart';
 import 'package:chatapp/services/file/file_compression_service.dart';
-import 'package:chatapp/model/file_attachment.dart';
 
 void main() {
   group('FileService Tests', () {
-    late FileService fileService;
     late FileSecurityService securityService;
     late FileCompressionService compressionService;
 
     setUp(() {
-      fileService = FileService();
       securityService = FileSecurityService();
       compressionService = FileCompressionService();
     });

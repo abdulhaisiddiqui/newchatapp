@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:chatapp/components/file_picker_widget.dart';
@@ -13,16 +12,10 @@ void main() {
     testWidgets('should display file picker button', (
       WidgetTester tester,
     ) async {
-      bool filesSelected = false;
-
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: ChatFilePickerButton(
-              onFilesSelected: (files) {
-                filesSelected = true;
-              },
-            ),
+            body: ChatFilePickerButton(onFilesSelected: (files) {}),
           ),
         ),
       );

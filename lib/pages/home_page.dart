@@ -2,9 +2,7 @@ import 'package:chatapp/services/auth/auth_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
-import 'package:chatapp/pages/bottomNav_screen.dart';
 
 import 'chat_page.dart';
 
@@ -182,7 +180,10 @@ class _HomePageState extends State<HomePage> {
 
           print('DEBUG: Navigating to chat with uid: $uid, email: $email');
           // Ensure we have valid data before navigating
-          if (uid != null && uid.isNotEmpty && email != null && email.isNotEmpty) {
+          if (uid != null &&
+              uid.isNotEmpty &&
+              email != null &&
+              email.isNotEmpty) {
             Navigator.push(
               context,
               MaterialPageRoute(

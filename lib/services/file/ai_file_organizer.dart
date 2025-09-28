@@ -1,6 +1,4 @@
-import 'dart:io';
 import 'package:chatapp/model/file_attachment.dart';
-import 'package:chatapp/model/message_type.dart';
 
 /// AI-powered file organization system that automatically categorizes files
 /// based on content analysis, naming patterns, and metadata
@@ -245,11 +243,9 @@ class AIFileOrganizer {
     List<CategorySuggestion> suggestions = [];
 
     // Analyze by MIME type
-    String? mimeType = fileAttachment.mimeType;
-    if (mimeType != null) {
-      var mimeSuggestions = _analyzeByMimeType(mimeType);
-      suggestions.addAll(mimeSuggestions);
-    }
+    String mimeType = fileAttachment.mimeType;
+    var mimeSuggestions = _analyzeByMimeType(mimeType);
+    suggestions.addAll(mimeSuggestions);
 
     // Analyze by file extension
     String extension = fileAttachment.fileExtension.toLowerCase();
