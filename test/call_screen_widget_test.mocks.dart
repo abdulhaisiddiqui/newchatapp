@@ -30,7 +30,7 @@ import 'package:mockito/mockito.dart' as _i1;
 class MockCallManagerInterface extends _i1.Mock
     implements _i2.CallManagerInterface {
   MockCallManagerInterface() {
-    // _i1.throwOnMissingStub(this);
+    _i1.throwOnMissingStub(this);
   }
 
   @override
