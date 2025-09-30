@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../components/call/incoming_call_dialog.dart';
 import '../components/error_dialog.dart';
 import '../services/call/call_manager.dart';
@@ -38,16 +39,27 @@ class _CallScreenState extends State<CallScreen> implements CallStateListener {
 
   Future<void> _loadCallHistory() async {
     try {
-      final history = await _callManager.getCallHistory('');
-      setState(() {
-        _callHistory = history;
-        _isLoading = false;
-      });
+      // Get current user ID from Firebase Auth
+      final String userId =
+          FirebaseAuth.instance.currentUser?.uid ?? 'default_user';
+
+      // Use non-empty string for document path
+      final history = await _callManager.getCallHistory(userId);
+
+      if (mounted) {
+        setState(() {
+          _callHistory = history;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _errorMessage = 'Failed to load call history: $e';
-        _isLoading = false;
-      });
+      debugPrint('Error getting call history: $e');
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Failed to load call history: $e';
+          _isLoading = false;
+        });
+      }
     }
   }
 

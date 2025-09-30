@@ -42,6 +42,7 @@ dependencies:
   flutter_slidable: ^3.0.0
   image_picker: ^1.2.0
   firebase_storage: ^12.4.10
+  firebase_database: ^11.0.0
   provider:
   
   # File sharing dependencies
@@ -54,6 +55,7 @@ dependencies:
   path: ^1.8.3
   permission_handler: ^11.0.1
   http: ^1.1.0
+  record: ^6.1.1
 
 dev_dependencies:
   flutter_test:

@@ -117,7 +117,7 @@ class ChatService extends ChangeNotifier {
       DocumentSnapshot messageDoc = await _firestore
           .collection('chat_rooms')
           .doc(chatRoomId)
-          .collection('message')
+          .collection('messages')
           .doc(messageId)
           .get();
 
@@ -137,7 +137,7 @@ class ChatService extends ChangeNotifier {
       await _firestore
           .collection('chat_rooms')
           .doc(chatRoomId)
-          .collection('message')
+          .collection('messages')
           .doc(messageId)
           .update({
             'message': newMessage,
@@ -165,7 +165,7 @@ class ChatService extends ChangeNotifier {
       DocumentSnapshot messageDoc = await _firestore
           .collection('chat_rooms')
           .doc(chatRoomId)
-          .collection('message')
+          .collection('messages')
           .doc(messageId)
           .get();
 
@@ -192,7 +192,7 @@ class ChatService extends ChangeNotifier {
       await _firestore
           .collection('chat_rooms')
           .doc(chatRoomId)
-          .collection('message')
+          .collection('messages')
           .doc(messageId)
           .delete();
     } catch (e) {
@@ -214,7 +214,7 @@ class ChatService extends ChangeNotifier {
     await _firestore
         .collection('chat_rooms')
         .doc(chatRoomId)
-        .collection('message')
+        .collection('messages')
         .add(message.toMap());
 
     //update chat room metadata
@@ -228,7 +228,7 @@ class ChatService extends ChangeNotifier {
   ) async {
     try {
       await _firestore.collection('chat_rooms').doc(chatRoomId).set({
-        'participants': [message.senderId, message.receiverId],
+        'members': [message.senderId, message.receiverId],
         'lastMessage': message.toMap(),
         'lastActivity': FieldValue.serverTimestamp(),
         'messageCount': FieldValue.increment(1),
@@ -250,7 +250,7 @@ class ChatService extends ChangeNotifier {
     return _firestore
         .collection('chat_rooms')
         .doc(chatRoomId)
-        .collection('message')
+        .collection('messages')
         .orderBy('timestamp', descending: false)
         .snapshots()
         .map((snapshot) {
@@ -273,7 +273,7 @@ class ChatService extends ChangeNotifier {
     return _firestore
         .collection('chat_rooms')
         .doc(chatRoomId)
-        .collection('message')
+        .collection('messages')
         .orderBy('timestamp', descending: false)
         .snapshots();
   }
@@ -295,7 +295,7 @@ class ChatService extends ChangeNotifier {
       Query messagesQuery = _firestore
           .collection('chat_rooms')
           .doc(chatRoomId)
-          .collection('message')
+          .collection('messages')
           .orderBy('timestamp', descending: true)
           .limit(100);
 
@@ -333,7 +333,7 @@ class ChatService extends ChangeNotifier {
       Query messagesQuery = _firestore
           .collection('chat_rooms')
           .doc(chatRoomId)
-          .collection('message')
+          .collection('messages')
           .where('type', whereNotIn: ['text'])
           .orderBy('timestamp', descending: true);
 

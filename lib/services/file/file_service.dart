@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:mime/mime.dart';
 import 'package:chatapp/model/file_attachment.dart';
 import 'package:chatapp/services/file/file_upload_result.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class FileService {
   static final FileService _instance = FileService._internal();
@@ -23,51 +24,96 @@ class FileService {
   static const int MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
   static const Duration CACHE_DURATION = Duration(days: 7);
 
-  /// Upload a file to Firebase Storage
+  /// Upload a file to Firebase Storage with optimized handling and error recovery
   Future<FileUploadResult> uploadFile({
-    required File file,
+    required dynamic file, // File on mobile, different type on web
     required String chatRoomId,
     required String messageId,
     Function(double)? onProgress,
+    Function(String)? onStatusUpdate,
   }) async {
+    // Web platform file operations are not supported
+    if (kIsWeb) {
+      onStatusUpdate?.call(
+        'Error: File operations not supported on web platform',
+      );
+      return FileUploadResult.error(
+        'File operations not supported on web platform',
+      );
+    }
+
     try {
+      // Status update
+      onStatusUpdate?.call('Preparing upload...');
+
       // Get current user
       final currentUser = _auth.currentUser;
       if (currentUser == null) {
+        onStatusUpdate?.call('Error: User not authenticated');
         return FileUploadResult.error('User not authenticated');
       }
 
       // Validate file size
-      int fileSize = await file.length();
+      int fileSize = await (file as File).length();
       if (fileSize > MAX_FILE_SIZE) {
+        onStatusUpdate?.call('Error: File size exceeds limit');
         return FileUploadResult.error('File size exceeds 50MB limit');
       }
 
       // Generate unique file ID and name
       String fileId = _generateFileId();
-      String originalFileName = path.basename(file.path);
-      String fileExtension = path.extension(file.path).toLowerCase();
+      String originalFileName = path.basename((file as File).path);
+      String fileExtension = path.extension((file as File).path).toLowerCase();
       String fileName = '$fileId$fileExtension';
 
       // Get MIME type
       String? mimeType =
-          lookupMimeType(file.path) ?? 'application/octet-stream';
+          lookupMimeType((file as File).path) ?? 'application/octet-stream';
 
       // Create storage path
       String storagePath = '$CHAT_FILES_PATH/$chatRoomId/$fileName';
+      onStatusUpdate?.call('Starting upload...');
 
-      // Upload file to Firebase Storage
-      UploadTask uploadTask = _storage.ref(storagePath).putFile(file);
+      // Upload file to Firebase Storage with retry logic
+      UploadTask uploadTask;
+      int retryCount = 0;
+      const maxRetries = 3;
+
+      while (true) {
+        try {
+          uploadTask = _storage.ref(storagePath).putFile(file);
+          break;
+        } catch (e) {
+          if (retryCount >= maxRetries) throw e;
+          retryCount++;
+          onStatusUpdate?.call(
+            'Retrying upload (${retryCount}/${maxRetries})...',
+          );
+          await Future.delayed(Duration(seconds: 2 * retryCount));
+        }
+      }
 
       // Track progress
       uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
         if (snapshot.totalBytes > 0) {
           double progress = snapshot.bytesTransferred / snapshot.totalBytes;
           onProgress?.call(progress);
+
+          // Update status based on progress
+          if (progress < 0.3) {
+            onStatusUpdate?.call('Uploading file...');
+          } else if (progress < 0.7) {
+            onStatusUpdate?.call('Upload in progress...');
+          } else if (progress < 1.0) {
+            onStatusUpdate?.call('Almost complete...');
+          } else {
+            onStatusUpdate?.call('Processing upload...');
+          }
         }
       });
 
       // Wait for upload completion
+      onStatusUpdate?.call('Finalizing upload...');
       TaskSnapshot snapshot = await uploadTask;
       String downloadUrl = await snapshot.ref.getDownloadURL();
 
@@ -86,10 +132,13 @@ class FileService {
       );
 
       // Store file metadata in Firestore
+      onStatusUpdate?.call('Saving file information...');
       await _storeFileMetadata(fileAttachment, chatRoomId, messageId);
 
+      onStatusUpdate?.call('Upload complete');
       return FileUploadResult.success(downloadUrl: downloadUrl, fileId: fileId);
     } catch (e) {
+      onStatusUpdate?.call('Error: ${e.toString()}');
       return FileUploadResult.error(
         'Upload failed: ${e.toString()}',
         e is Exception ? e : Exception(e.toString()),
@@ -103,7 +152,15 @@ class FileService {
     required String fileName,
     Function(double)? onProgress,
   }) async {
+    // Web platform file operations are not supported
+    if (kIsWeb) {
+      return FileDownloadResult.error(
+        'File operations not supported on web platform',
+      );
+    }
+
     try {
+      // For mobile platforms, continue with file download
       // Check if file is already cached
       File? cachedFile = await _getCachedFile(fileName);
       if (cachedFile != null && await cachedFile.exists()) {
@@ -235,6 +292,11 @@ class FileService {
 
   /// Get local file path for downloads
   Future<String> _getLocalFilePath(String fileName) async {
+    // Web platform not supported for file operations
+    if (kIsWeb) {
+      return fileName;
+    }
+
     Directory appDir = await getApplicationDocumentsDirectory();
     Directory downloadDir = Directory('${appDir.path}/downloads');
 
@@ -247,6 +309,11 @@ class FileService {
 
   /// Get cached file if it exists and is still valid
   Future<File?> _getCachedFile(String fileName) async {
+    // Web platform doesn't support file caching
+    if (kIsWeb) {
+      return null;
+    }
+
     try {
       Directory appDir = await getApplicationDocumentsDirectory();
       Directory cacheDir = Directory('${appDir.path}/file_cache');
@@ -276,6 +343,9 @@ class FileService {
 
   /// Cache a downloaded file
   Future<void> _cacheFile(File file, String fileName) async {
+    // Web platform doesn't support file caching
+    if (kIsWeb) return;
+
     try {
       Directory appDir = await getApplicationDocumentsDirectory();
       Directory cacheDir = Directory('${appDir.path}/file_cache');
@@ -293,6 +363,9 @@ class FileService {
 
   /// Remove cached file
   Future<void> _removeCachedFile(String fileName) async {
+    // Web platform doesn't support file caching
+    if (kIsWeb) return;
+
     try {
       Directory appDir = await getApplicationDocumentsDirectory();
       File cachedFile = File('${appDir.path}/file_cache/$fileName');
@@ -307,6 +380,9 @@ class FileService {
 
   /// Clean up old cached files
   Future<void> cleanupCache() async {
+    // Web platform doesn't support file caching
+    if (kIsWeb) return;
+
     try {
       Directory appDir = await getApplicationDocumentsDirectory();
       Directory cacheDir = Directory('${appDir.path}/file_cache');
@@ -331,6 +407,9 @@ class FileService {
 
   /// Get total cache size
   Future<int> getCacheSize() async {
+    // Web platform doesn't support file caching
+    if (kIsWeb) return 0;
+
     try {
       Directory appDir = await getApplicationDocumentsDirectory();
       Directory cacheDir = Directory('${appDir.path}/file_cache');

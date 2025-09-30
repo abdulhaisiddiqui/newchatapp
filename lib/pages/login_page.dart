@@ -31,6 +31,9 @@ class _SignInScreenState extends State<LoginPage> {
       return;
     }
     
+    // Check if widget is still mounted before setting state
+    if (!mounted) return;
+    
     // Set loading state
     setState(() {
       _isLoading = true;
@@ -59,17 +62,22 @@ class _SignInScreenState extends State<LoginPage> {
         errorMessage = 'Too many attempts. Try again later.';
       }
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(errorMessage),
-          backgroundColor: Colors.red,
-        )
-      );
+      // Check if widget is still mounted before showing SnackBar
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+          )
+        );
+      }
     } finally {
-      // Reset loading state
-      setState(() {
-        _isLoading = false;
-      });
+      // Reset loading state only if still mounted
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'chat_page.dart';
+import '../components/user_status_indicator.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -117,30 +118,21 @@ class _HomePageState extends State<HomePage> {
 
   /// --- Firestore User List ---
   Widget _buildUserList() {
-    print('DEBUG: Building user list');
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('users').snapshots(),
       builder: (context, snapshots) {
-        print('DEBUG: StreamBuilder state: ${snapshots.connectionState}');
-        print('DEBUG: Has error: ${snapshots.hasError}');
-        print('DEBUG: Has data: ${snapshots.hasData}');
-
         if (snapshots.hasError) {
-          print('DEBUG: Error: ${snapshots.error}');
           return const Center(child: Text('Error'));
         }
         if (snapshots.connectionState == ConnectionState.waiting) {
-          print('DEBUG: Loading users...');
           return const Center(child: Text('Loading...'));
         }
 
         if (snapshots.data == null) {
-          print('DEBUG: No data received');
           return const Center(child: Text('No users found'));
         }
 
         final docs = snapshots.data!.docs;
-        print('DEBUG: Found ${docs.length} user documents');
 
         return ListView(
           padding: const EdgeInsets.only(top: 20),
@@ -153,32 +145,40 @@ class _HomePageState extends State<HomePage> {
   Widget _buildUserListItem(DocumentSnapshot document) {
     Map<String, dynamic> data = document.data()! as Map<String, dynamic>;
 
-    print('DEBUG: User document data: $data');
-
     // Skip current user (temporarily disabled for testing)
     final currentUser = _auth.currentUser;
-    print('DEBUG: Current user email: ${currentUser?.email}');
 
     // TEMPORARILY DISABLED: Allow all users to be shown for testing
     // if (currentUser == null) {
-    //   print('DEBUG: No current user, showing all users');
     // } else if (currentUser.email == data['email']) {
-    //   print('DEBUG: Skipping current user: ${data['email']}');
     //   return Container();
     // }
+
+    final uid = data['uid'] ?? document.id; // Use document ID as fallback
+    final email = data['email'] ?? 'test@example.com'; // Use fallback email
+    final username = data['username'] ?? email.split('@')[0];
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 16),
       child: ListTile(
+        leading: CircleAvatar(
+          backgroundImage:
+              data['profilePic'] != null &&
+                  data['profilePic'].toString().isNotEmpty
+              ? NetworkImage(data['profilePic'])
+              : const AssetImage('assets/images/user.png') as ImageProvider,
+          radius: 24,
+          child: Align(
+            alignment: Alignment.bottomRight,
+            child: UserStatusIndicator(userId: uid, showText: false, size: 12),
+          ),
+        ),
+        title: Text(
+          username,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        subtitle: UserStatusIndicator(userId: uid, showText: true, size: 8),
         onTap: () {
-          final uid = data['uid'] ?? document.id; // Use document ID as fallback
-          final email =
-              data['email'] ?? 'test@example.com'; // Use fallback email
-          print(
-            'DEBUG: Tapped user - uid: $uid, email: $email, data keys: ${data.keys}',
-          );
-
-          print('DEBUG: Navigating to chat with uid: $uid, email: $email');
           // Ensure we have valid data before navigating
           if (uid != null &&
               uid.isNotEmpty &&
@@ -198,27 +198,6 @@ class _HomePageState extends State<HomePage> {
             );
           }
         },
-        title: Text(
-          data['username'] ?? data['email'],
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-        ),
-        subtitle: const Text("Tap to chat", style: TextStyle(fontSize: 12)),
-        leading: Stack(
-          children: [
-            CircleAvatar(
-              backgroundImage: NetworkImage(
-                data['profilePic'] ??
-                    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQxSFDJsQuUfNJriz0KiaTD28GR82xL1fW-nvsEF9GwaI_sq6SkPloo&usqp=CAE&s',
-              ),
-              radius: 25,
-            ),
-            Positioned(
-              bottom: 0,
-              right: 0,
-              child: CircleAvatar(backgroundColor: Colors.green, radius: 6),
-            ),
-          ],
-        ),
       ),
     );
   }

@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:chatapp/components/file_selection_dialog.dart';
 import 'package:chatapp/services/file/file_security_service.dart';
+import 'package:chatapp/components/file_status_monitor.dart';
 
 class FilePickerWidget extends StatefulWidget {
   final Function(List<File>) onFilesSelected;
@@ -10,6 +11,9 @@ class FilePickerWidget extends StatefulWidget {
   final String? hintText;
   final bool showPreview;
   final Widget? child;
+  final bool isUploading;
+  final double uploadProgress;
+  final String? statusMessage;
 
   const FilePickerWidget({
     Key? key,
@@ -19,6 +23,9 @@ class FilePickerWidget extends StatefulWidget {
     this.hintText,
     this.showPreview = true,
     this.child,
+    this.isUploading = false,
+    this.uploadProgress = 0.0,
+    this.statusMessage,
   }) : super(key: key);
 
   @override
@@ -34,8 +41,17 @@ class _FilePickerWidgetState extends State<FilePickerWidget> {
     return Column(
       children: [
         _buildDropZone(),
-        if (widget.showPreview && _selectedFiles.isNotEmpty) ...[
-          const SizedBox(height: 16),
+        if (widget.statusMessage != null) ...[          FileStatusMonitor(
+            status: widget.statusMessage!,
+            progress: widget.uploadProgress,
+            isError: widget.statusMessage!.startsWith('Error'),
+            onRetry: widget.statusMessage!.startsWith('Error') ? _showFileSelectionDialog : null,
+          ),
+          const SizedBox(height: 8),
+        ] else if (widget.isUploading) ...[          LinearProgressIndicator(value: widget.uploadProgress),
+          const SizedBox(height: 8),
+        ],
+        if (widget.showPreview && _selectedFiles.isNotEmpty) ...[          const SizedBox(height: 16),
           _buildFilePreview(),
         ],
       ],
