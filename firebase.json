@@ -1,1 +1,34 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"baby-shop-hub-a04d1","appId":"1:93624205799:android:3920f77b4c567fdeb53d42","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"baby-shop-hub-a04d1","configurations":{"android":"1:93624205799:android:3920f77b4c567fdeb53d42"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "baby-shop-hub-a04d1",
+          "appId": "1:93624205799:android:3920f77b4c567fdeb53d42",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "baby-shop-hub-a04d1",
+          "configurations": {
+            "android": "1:93624205799:android:3920f77b4c567fdeb53d42"
+          }
+        }
+      }
+    }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ]
+    }
+  ]
+}

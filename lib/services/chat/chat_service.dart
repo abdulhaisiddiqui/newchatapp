@@ -4,6 +4,8 @@ import 'package:chatapp/model/file_attachment.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+
 
 class ChatService extends ChangeNotifier {
   // get instance of auth and firestore
@@ -202,24 +204,52 @@ class ChatService extends ChangeNotifier {
 
   //HELPER METHOD TO SEND MESSAGE TO FIRESTORE
   Future<void> _sendMessageToFirestore(
-    Message message,
-    String receiverId,
-  ) async {
-    //construct chat room id from current user id and receiver id (sorted to ensure uniqueness)
+      Message message,
+      String receiverId,
+      ) async {
     List<String> ids = [message.senderId, receiverId];
-    ids.sort(); // sort the ids (this ensures the chat room id is always the same for any pair of people)
+    ids.sort();
     String chatRoomId = ids.join("_");
 
-    //add a new message to database
+    // 1. Save message
     await _firestore
         .collection('chat_rooms')
         .doc(chatRoomId)
         .collection('messages')
         .add(message.toMap());
 
-    //update chat room metadata
+    // 2. Update chat room metadata
     await _updateChatRoomMetadata(chatRoomId, message);
+
+    // 3. Send push notification to receiver
+    await _sendNotificationToReceiver(receiverId, message.message);
   }
+
+  Future<void> _sendNotificationToReceiver(String receiverId, String message) async {
+    try {
+      // Get receiver tokens
+      DocumentSnapshot userDoc =
+      await _firestore.collection('users').doc(receiverId).get();
+
+      if (!userDoc.exists) return;
+
+      List<dynamic> tokens = userDoc['fcmTokens'] ?? [];
+      if (tokens.isEmpty) return;
+
+      for (String token in tokens) {
+        await FirebaseMessaging.instance.sendMessage(
+          to: token,
+          data: {
+            'title': 'New Message',
+            'body': message,
+          },
+        );
+      }
+    } catch (e) {
+      debugPrint("Failed to send notification: $e");
+    }
+  }
+
 
   //UPDATE CHAT ROOM METADATA
   Future<void> _updateChatRoomMetadata(
@@ -355,4 +385,6 @@ class ChatService extends ChangeNotifier {
       throw Exception('Failed to get chat files: ${e.toString()}');
     }
   }
+
+
 }

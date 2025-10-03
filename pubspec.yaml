@@ -43,6 +43,8 @@ dependencies:
   image_picker: ^1.2.0
   firebase_storage: ^12.4.10
   firebase_database: ^11.0.0
+  firebase_messaging: ^15.0.0
+  flutter_local_notifications: ^17.0.0
   provider:
   
   # File sharing dependencies
