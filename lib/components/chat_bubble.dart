@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:chatapp/model/message.dart';
 import 'package:chatapp/model/message_type.dart';
 import 'package:chatapp/components/file_preview_widget.dart';
+import 'package:chatapp/components/voice_message_widget.dart';
 
 class ChatBubble extends StatelessWidget {
   final Message message;
@@ -68,10 +69,11 @@ class ChatBubble extends StatelessWidget {
     switch (message.type) {
       case MessageType.text:
         return _buildTextMessage();
+      case MessageType.audio:
+        return _buildAudioMessage();
       case MessageType.image:
       case MessageType.video:
       case MessageType.document:
-      case MessageType.audio:
       case MessageType.other:
         return _buildFileMessage(context);
     }
@@ -87,6 +89,18 @@ class ChatBubble extends StatelessWidget {
           color: isCurrentUser ? Colors.white : Colors.black87,
         ),
       ),
+    );
+  }
+
+  Widget _buildAudioMessage() {
+    if (message.fileAttachment == null ||
+        message.fileAttachment!.downloadUrl.isEmpty) {
+      return _buildTextMessage(); // Fallback to text if no file attachment or URL
+    }
+
+    return VoiceMessageWidget(
+      audioUrl: message.fileAttachment!.downloadUrl,
+      isCurrentUser: isCurrentUser,
     );
   }
 

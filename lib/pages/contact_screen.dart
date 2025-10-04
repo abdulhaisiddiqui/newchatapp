@@ -100,43 +100,52 @@ class _ContactScreenState extends State<ContactScreen> {
   }
 
   Widget _buildUserListItem(DocumentSnapshot document) {
-    Map<String, dynamic> data = document.data()! as Map<String, dynamic>;
+    final data = document.data() as Map<String, dynamic>?;
+    if (data == null) return const SizedBox.shrink();
 
-    if (_auth.currentUser!.email == data['email']) {
-      return Container();
+    final currentUserEmail = _auth.currentUser?.email;
+    final userEmail = data['email'] as String?;
+    final userUid = data['uid'] as String?;
+
+    // Skip current user and invalid entries
+    if (currentUserEmail == userEmail || userEmail == null || userUid == null) {
+      return const SizedBox.shrink();
     }
 
     return Padding(
-      padding: EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
       child: Slidable(
-        key: ValueKey(data['uid']),
-
+        key: ValueKey(userUid),
         child: ListTile(
           onTap: () {
             Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (context) => ChatPage(
-                  receiverUserEmail: data['email'],
-                  receiverUserId: data['uid'],
+                  receiverUserEmail: userEmail,
+                  receiverUserId: userUid,
                 ),
               ),
             );
           },
           title: Text(
-            data['username'] ?? data['email'],
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            data['username'] as String? ?? userEmail.split('@').first,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
           ),
-          subtitle: Text(data['bio'] ?? "Hey there! I am using Chatbox", style: TextStyle(fontSize: 12)),
+          subtitle: Text(
+            data['bio'] as String? ?? "Hey there! I am using Chatbox",
+            style: const TextStyle(fontSize: 12),
+          ),
           leading: Stack(
             children: [
               CircleAvatar(
                 backgroundImage: NetworkImage(
-                  data['profilePic'] ?? 'assets/images/google-logo.png',
+                  data['profilePic'] as String? ??
+                      'assets/images/google-logo.png',
                 ),
                 radius: 25,
               ),
-              Positioned(
+              const Positioned(
                 bottom: 0,
                 right: 0,
                 child: CircleAvatar(backgroundColor: Colors.green, radius: 6),

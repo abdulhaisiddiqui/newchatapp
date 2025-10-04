@@ -1,6 +1,7 @@
 import 'package:chatapp/components/chat_bubble.dart';
 import 'package:chatapp/components/file_picker_widget.dart';
 import 'package:chatapp/components/call/call_screen_widget.dart';
+import 'package:chatapp/components/voice_recorder.dart';
 import 'package:chatapp/services/chat/chat_service.dart';
 import 'package:chatapp/services/file/file_service.dart';
 import 'package:chatapp/services/call/call_manager.dart';
@@ -14,8 +15,6 @@ import 'dart:io';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:record/record.dart' show AudioRecorder, RecordConfig;
-import 'package:path_provider/path_provider.dart';
 
 class ChatPage extends StatefulWidget {
   final String receiverUserEmail;
@@ -42,9 +41,6 @@ class _ChatPageState extends State<ChatPage> {
   bool _isUploading = false;
   double _uploadProgress = 0.0;
   String? _statusMessage;
-  bool _isRecording = false;
-  AudioRecorder? _audioRecorder;
-  String? _recordingPath;
   bool _isTyping = false;
   Timer? _typingTimer;
 
@@ -147,6 +143,60 @@ class _ChatPageState extends State<ChatPage> {
             : null,
       ),
     );
+  }
+
+  void _onVoiceRecordingComplete(String audioPath) async {
+    // Upload the recorded audio file and send as voice message
+    setState(() {
+      _isUploading = true;
+      _uploadProgress = 0.0;
+      _statusMessage = 'Uploading voice message...';
+    });
+
+    try {
+      final audioFile = File(audioPath);
+
+      // Upload voice file
+      final result = await _fileService.uploadFile(
+        file: audioFile,
+        chatRoomId: _getChatRoomId(),
+        messageId: DateTime.now().millisecondsSinceEpoch.toString(),
+        onProgress: (progress) {
+          setState(() => _uploadProgress = progress);
+        },
+        onStatusUpdate: (status) {
+          setState(() => _statusMessage = status);
+        },
+      );
+
+      if (result.isSuccess && result.fileId != null) {
+        // Get the file attachment from Firestore
+        final fileAttachment = await _fileService.getFileMetadata(
+          result.fileId!,
+        );
+
+        if (fileAttachment != null) {
+          // Send voice message
+          await _chatService.sendFileMessage(
+            receiverId: widget.receiverUserId,
+            fileAttachment: fileAttachment,
+            textMessage: '', // No text for voice messages
+          );
+        } else {
+          _showErrorSnackBar('Failed to get voice message metadata');
+        }
+      } else {
+        _showErrorSnackBar('Failed to upload voice message: ${result.error}');
+      }
+    } catch (e) {
+      _showErrorSnackBar('Error sending voice message: $e');
+    } finally {
+      setState(() {
+        _isUploading = false;
+        _uploadProgress = 0.0;
+        _statusMessage = null;
+      });
+    }
   }
 
   Future<void> _startAudioCall() async {
@@ -264,99 +314,6 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
-  Future<void> _startVoiceRecording() async {
-    // Voice messages are not supported on web platform
-    if (kIsWeb) {
-      _showErrorSnackBar('Voice messages are not supported on web platform');
-      return;
-    }
-
-    // Voice messages are only available on mobile platforms
-    try {
-      // Check microphone permission
-      if (!await _checkMicrophonePermission()) {
-        _showPermissionDeniedDialog(
-          'Microphone permission is required for voice messages',
-        );
-        return;
-      }
-
-      // Check if already recording
-      if (_isRecording) {
-        await _stopVoiceRecording();
-        return;
-      }
-
-      // Initialize audio recorder if not already done
-      _audioRecorder ??= AudioRecorder();
-
-      // Start recording
-      final hasPermission = await _audioRecorder!.hasPermission();
-      if (!hasPermission) {
-        _showErrorSnackBar('Microphone permission denied');
-        return;
-      }
-
-      // Create a unique file path for the recording
-      final directory = await getApplicationDocumentsDirectory();
-      _recordingPath =
-          '${directory.path}/voice_message_${DateTime.now().millisecondsSinceEpoch}.m4a';
-
-      await _audioRecorder!.start(const RecordConfig(), path: _recordingPath!);
-
-      setState(() {
-        _isRecording = true;
-      });
-
-      // Auto-stop after 60 seconds
-      Future.delayed(const Duration(seconds: 60), () {
-        if (_isRecording) {
-          _stopVoiceRecording();
-        }
-      });
-    } catch (e) {
-      _showErrorSnackBar('Failed to start recording: $e');
-    }
-  }
-
-  Future<void> _stopVoiceRecording() async {
-    try {
-      if (!_isRecording) return;
-
-      final path = await _audioRecorder!.stop();
-      setState(() {
-        _isRecording = false;
-      });
-
-      if (path != null && _recordingPath != null) {
-        // Send the voice message
-        await _sendVoiceMessage(File(_recordingPath!));
-      }
-
-      _recordingPath = null;
-    } catch (e) {
-      _showErrorSnackBar('Failed to stop recording: $e');
-      setState(() {
-        _isRecording = false;
-      });
-    }
-  }
-
-  Future<void> _sendVoiceMessage(File voiceFile) async {
-    // Voice messages are not supported on web platform
-    if (kIsWeb) {
-      _showErrorSnackBar('Voice messages are not supported on web platform');
-      return;
-    }
-
-    // For mobile platforms, show a message that voice messages are temporarily disabled
-    // due to web compatibility issues. In a production app, you'd implement proper
-    // mobile-only voice message handling.
-    _showErrorSnackBar(
-      'Voice messages are currently disabled due to compatibility issues',
-    );
-  }
-
   @override
   void initState() {
     super.initState();
@@ -396,7 +353,6 @@ class _ChatPageState extends State<ChatPage> {
   void dispose() {
     _messageController.removeListener(_onTypingChanged);
     _typingTimer?.cancel();
-    _audioRecorder?.dispose();
     super.dispose();
   }
 
@@ -547,24 +503,7 @@ class _ChatPageState extends State<ChatPage> {
                 ),
                 const SizedBox(width: 10),
                 if (!kIsWeb) ...[
-                  Semantics(
-                    label: _isRecording
-                        ? 'Stop recording voice message'
-                        : 'Record voice message',
-                    hint: _isRecording
-                        ? 'Tap to stop recording and send'
-                        : 'Tap and hold to record a voice message',
-                    child: GestureDetector(
-                      onTap: _startVoiceRecording,
-                      onLongPress: _startVoiceRecording,
-                      onLongPressEnd: (_) => _stopVoiceRecording(),
-                      child: Icon(
-                        _isRecording ? Icons.stop : Icons.mic_none,
-                        color: _isRecording ? Colors.red : Colors.black,
-                        size: 24,
-                      ),
-                    ),
-                  ),
+                  VoiceRecorder(onStop: _onVoiceRecordingComplete),
                 ] else ...[
                   Tooltip(
                     message: 'Voice messages not available on web',

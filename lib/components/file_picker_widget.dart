@@ -41,17 +41,22 @@ class _FilePickerWidgetState extends State<FilePickerWidget> {
     return Column(
       children: [
         _buildDropZone(),
-        if (widget.statusMessage != null) ...[          FileStatusMonitor(
+        if (widget.statusMessage != null) ...[
+          FileStatusMonitor(
             status: widget.statusMessage!,
             progress: widget.uploadProgress,
             isError: widget.statusMessage!.startsWith('Error'),
-            onRetry: widget.statusMessage!.startsWith('Error') ? _showFileSelectionDialog : null,
+            onRetry: widget.statusMessage!.startsWith('Error')
+                ? _showFileSelectionDialog
+                : null,
           ),
           const SizedBox(height: 8),
-        ] else if (widget.isUploading) ...[          LinearProgressIndicator(value: widget.uploadProgress),
+        ] else if (widget.isUploading) ...[
+          LinearProgressIndicator(value: widget.uploadProgress),
           const SizedBox(height: 8),
         ],
-        if (widget.showPreview && _selectedFiles.isNotEmpty) ...[          const SizedBox(height: 16),
+        if (widget.showPreview && _selectedFiles.isNotEmpty) ...[
+          const SizedBox(height: 16),
           _buildFilePreview(),
         ],
       ],
@@ -255,12 +260,22 @@ class _FilePickerWidgetState extends State<FilePickerWidget> {
   }
 
   void _showFileSelectionDialog() {
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => FileSelectionDialog(
-        onFilesSelected: _handleFilesSelected,
-        maxFiles: widget.maxFiles,
-        allowedExtensions: widget.allowedExtensions,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
+        ),
+        child: FileSelectionDialog(
+          onFilesSelected: _handleFilesSelected,
+          maxFiles: widget.maxFiles,
+          allowedExtensions: widget.allowedExtensions,
+        ),
       ),
     );
   }
@@ -321,12 +336,22 @@ class ChatFilePickerButton extends StatelessWidget {
   }
 
   void _showFileSelectionDialog(BuildContext context) {
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => FileSelectionDialog(
-        onFilesSelected: onFilesSelected,
-        maxFiles: maxFiles,
-        allowedExtensions: allowedExtensions,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
+        ),
+        child: FileSelectionDialog(
+          onFilesSelected: onFilesSelected,
+          maxFiles: maxFiles,
+          allowedExtensions: allowedExtensions,
+        ),
       ),
     );
   }
@@ -357,11 +382,21 @@ class CompactFilePicker extends StatelessWidget {
   }
 
   void _showFileSelectionDialog(BuildContext context) {
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => FileSelectionDialog(
-        onFilesSelected: onFilesSelected,
-        maxFiles: maxFiles,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
+        ),
+        child: FileSelectionDialog(
+          onFilesSelected: onFilesSelected,
+          maxFiles: maxFiles,
+        ),
       ),
     );
   }

@@ -27,69 +27,139 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Select Files'),
-      content: Column(
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 400),
+      child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _buildOptionTile(
-            icon: Icons.photo_library,
-            title: 'Photos & Videos',
-            subtitle: 'Select from gallery',
-            onTap: () => _pickFromGallery(),
+          // Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).scaffoldBackgroundColor,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(20),
+                topRight: Radius.circular(20),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Text(
+                  'Share content',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                ),
+                const Spacer(),
+                IconButton(
+                  onPressed: _isLoading
+                      ? null
+                      : () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 8),
-          _buildOptionTile(
-            icon: Icons.camera_alt,
-            title: 'Camera',
-            subtitle: 'Take a photo',
-            onTap: () => _pickFromCamera(),
+
+          // Content
+          Flexible(
+            child: Container(
+              color: Theme.of(context).scaffoldBackgroundColor,
+              child: _isLoading
+                  ? const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CircularProgressIndicator(),
+                          SizedBox(height: 16),
+                          Text('Selecting files...'),
+                        ],
+                      ),
+                    )
+                  : GridView.count(
+                      shrinkWrap: true,
+                      crossAxisCount: 3,
+                      padding: const EdgeInsets.all(20),
+                      mainAxisSpacing: 20,
+                      crossAxisSpacing: 20,
+                      children: [
+                        _buildGridItem(
+                          icon: Icons.photo_library,
+                          label: 'Gallery',
+                          color: Colors.blue,
+                          onTap: () => _pickFromGallery(),
+                        ),
+                        _buildGridItem(
+                          icon: Icons.camera_alt,
+                          label: 'Camera',
+                          color: Colors.red,
+                          onTap: () => _pickFromCamera(),
+                        ),
+                        _buildGridItem(
+                          icon: Icons.insert_drive_file,
+                          label: 'Document',
+                          color: Colors.green,
+                          onTap: () => _pickDocuments(),
+                        ),
+                        _buildGridItem(
+                          icon: Icons.audio_file,
+                          label: 'Audio',
+                          color: Colors.orange,
+                          onTap: () => _pickAudioFiles(),
+                        ),
+                        _buildGridItem(
+                          icon: Icons.contact_page,
+                          label: 'Contact',
+                          color: Colors.purple,
+                          onTap: () => _pickContact(),
+                        ),
+                        _buildGridItem(
+                          icon: Icons.location_on,
+                          label: 'Location',
+                          color: Colors.teal,
+                          onTap: () => _pickLocation(),
+                        ),
+                      ],
+                    ),
+            ),
           ),
-          const SizedBox(height: 8),
-          _buildOptionTile(
-            icon: Icons.insert_drive_file,
-            title: 'Documents',
-            subtitle: 'Select files',
-            onTap: () => _pickDocuments(),
-          ),
-          const SizedBox(height: 8),
-          _buildOptionTile(
-            icon: Icons.folder,
-            title: 'All Files',
-            subtitle: 'Browse all file types',
-            onTap: () => _pickAllFiles(),
-          ),
-          if (_isLoading) ...[
-            const SizedBox(height: 16),
-            const CircularProgressIndicator(),
-            const SizedBox(height: 8),
-            const Text('Selecting files...'),
-          ],
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-      ],
     );
   }
 
-  Widget _buildOptionTile({
+  Widget _buildGridItem({
     required IconData icon,
-    required String title,
-    required String subtitle,
+    required String label,
+    required Color color,
     required VoidCallback onTap,
   }) {
-    return ListTile(
-      leading: Icon(icon, size: 32, color: Theme.of(context).primaryColor),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
-      subtitle: Text(subtitle),
+    return InkWell(
       onTap: _isLoading ? null : onTap,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: Colors.grey.shade300),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(icon, color: color, size: 28),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -232,6 +302,51 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> _pickAudioFiles() async {
+    setState(() => _isLoading = true);
+
+    try {
+      // Check permissions
+      if (!await _checkPermissions([Permission.storage])) {
+        _showPermissionDeniedDialog();
+        return;
+      }
+
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'flac'],
+        allowMultiple: widget.maxFiles > 1,
+      );
+
+      if (result != null) {
+        List<File> files = result.paths
+            .where((path) => path != null)
+            .map((path) => File(path!))
+            .toList();
+
+        if (files.isNotEmpty) {
+          await _handleSelectedFiles(files);
+        }
+      }
+    } catch (e) {
+      _showErrorDialog('Failed to select audio files: ${e.toString()}');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _pickContact() async {
+    // For now, show a message that contact sharing is not implemented
+    _showErrorDialog('Contact sharing is not yet implemented in this version.');
+  }
+
+  Future<void> _pickLocation() async {
+    // For now, show a message that location sharing is not implemented
+    _showErrorDialog(
+      'Location sharing is not yet implemented in this version.',
+    );
   }
 
   Future<void> _handleSelectedFiles(List<File> files) async {

@@ -2,6 +2,7 @@ import 'package:chatapp/pages/profile_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class SettingScreen extends StatelessWidget {
   const SettingScreen({super.key});
@@ -143,6 +144,12 @@ class SettingScreen extends StatelessWidget {
                         "Messages, group and others",
                       ),
                       buildSettingsTile(
+                        Icons.security,
+                        "Permissions",
+                        "Camera, microphone, storage access",
+                        onTap: () => _showPermissionsDialog(context),
+                      ),
+                      buildSettingsTile(
                         Icons.help_outline,
                         "Help",
                         "Help center, contact us, privacy policy",
@@ -164,8 +171,79 @@ class SettingScreen extends StatelessWidget {
     );
   }
 
+  void _showPermissionsDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('App Permissions'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildPermissionTile('Camera', Permission.camera),
+            _buildPermissionTile('Microphone', Permission.microphone),
+            _buildPermissionTile('Storage', Permission.storage),
+            _buildPermissionTile('Photos', Permission.photos),
+            const SizedBox(height: 16),
+            const Text(
+              'These permissions are required for media sharing, voice messages, and calls.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              openAppSettings();
+            },
+            child: const Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPermissionTile(String name, Permission permission) {
+    return FutureBuilder<PermissionStatus>(
+      future: permission.status,
+      builder: (context, snapshot) {
+        final status = snapshot.data;
+        final isGranted = status?.isGranted ?? false;
+        final isDenied = status?.isDenied ?? false;
+
+        return ListTile(
+          title: Text(name),
+          subtitle: Text(
+            isGranted
+                ? 'Granted'
+                : isDenied
+                ? 'Denied'
+                : 'Not requested',
+            style: TextStyle(
+              color: isGranted ? Colors.green : Colors.red,
+              fontSize: 12,
+            ),
+          ),
+          trailing: Icon(
+            isGranted ? Icons.check_circle : Icons.error,
+            color: isGranted ? Colors.green : Colors.red,
+          ),
+        );
+      },
+    );
+  }
+
   // 🔹 Helper widget for settings options
-  Widget buildSettingsTile(IconData icon, String title, String subtitle) {
+  Widget buildSettingsTile(
+    IconData icon,
+    String title,
+    String subtitle, {
+    VoidCallback? onTap,
+  }) {
     return ListTile(
       leading: CircleAvatar(
         backgroundColor: Colors.green.withOpacity(0.1),
@@ -173,7 +251,10 @@ class SettingScreen extends StatelessWidget {
       ),
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
       subtitle: subtitle.isNotEmpty ? Text(subtitle) : null,
-      onTap: () {},
+      onTap: onTap ?? () {},
+      trailing: onTap != null
+          ? const Icon(Icons.arrow_forward_ios, size: 16)
+          : null,
     );
   }
 }
