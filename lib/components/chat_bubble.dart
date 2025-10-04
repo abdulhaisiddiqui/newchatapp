@@ -1,50 +1,75 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:chatapp/model/message.dart';
 import 'package:chatapp/model/message_type.dart';
 import 'package:chatapp/components/file_preview_widget.dart';
-import 'package:chatapp/components/voice_message_widget.dart';
+import 'package:chatapp/components/audio_message_widget.dart';
+import 'package:chatapp/components/video_message_widget.dart';
+import 'package:chatapp/components/contact_message_widget.dart';
+import 'package:chatapp/components/location_message_widget.dart';
+import 'package:chatapp/pages/image_viewer_page.dart';
+import 'package:chatapp/pages/video_player_screen.dart';
 
 class ChatBubble extends StatelessWidget {
   final Message message;
   final bool isCurrentUser;
   final VoidCallback? onFileDownload;
+  final Function(Message)? onSwipeToReply;
+  final Function(Message)? onLongPressReaction;
+  final VoidCallback? onImageTap;
 
   const ChatBubble({
     super.key,
     required this.message,
     required this.isCurrentUser,
     this.onFileDownload,
+    this.onSwipeToReply,
+    this.onLongPressReaction,
+    this.onImageTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: isCurrentUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.75,
-        ),
-        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-        child: Column(
-          crossAxisAlignment: isCurrentUser
-              ? CrossAxisAlignment.end
-              : CrossAxisAlignment.start,
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: _getBorderRadius(),
-                color: isCurrentUser
-                    ? const Color(0xFF20A090)
-                    : Colors.grey.shade200,
-              ),
+    final messageContent = Container(
+      constraints: BoxConstraints(
+        maxWidth: MediaQuery.of(context).size.width * 0.75,
+      ),
+      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+      child: Column(
+        crossAxisAlignment: isCurrentUser
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: _getBorderRadius(),
+              color: isCurrentUser
+                  ? const Color(0xFF20A090)
+                  : Colors.grey.shade200,
+            ),
+            child: GestureDetector(
+              onLongPress: onLongPressReaction != null
+                  ? () => onLongPressReaction!(message)
+                  : null,
+              onHorizontalDragEnd: onSwipeToReply != null
+                  ? (details) {
+                      // Detect right swipe (positive velocity)
+                      if (details.primaryVelocity != null &&
+                          details.primaryVelocity! > 300) {
+                        onSwipeToReply!(message);
+                      }
+                    }
+                  : null,
               child: _buildMessageContent(context),
             ),
-            const SizedBox(height: 2),
-            _buildMessageInfo(context),
-          ],
-        ),
+          ),
+          const SizedBox(height: 2),
+          _buildMessageInfo(context),
+        ],
       ),
     );
+
+    return messageContent;
   }
 
   BorderRadius _getBorderRadius() {
@@ -66,6 +91,17 @@ class ChatBubble extends StatelessWidget {
   }
 
   Widget _buildMessageContent(BuildContext context) {
+    // Check for custom message types first
+    final rawData = (message as dynamic).toMap();
+    final messageType = rawData['messageType'];
+
+    if (messageType == 'contact') {
+      return _buildContactMessage();
+    } else if (messageType == 'location') {
+      return _buildLocationMessage();
+    }
+
+    // Handle standard message types
     switch (message.type) {
       case MessageType.text:
         return _buildTextMessage();
@@ -98,8 +134,34 @@ class ChatBubble extends StatelessWidget {
       return _buildTextMessage(); // Fallback to text if no file attachment or URL
     }
 
-    return VoiceMessageWidget(
+    return AudioMessageWidget(
       audioUrl: message.fileAttachment!.downloadUrl,
+      isCurrentUser: isCurrentUser,
+    );
+  }
+
+  Widget _buildContactMessage() {
+    final rawData = (message as dynamic).toMap();
+    final contactName = rawData['contactName'] ?? 'Unknown Contact';
+    final contactPhone = rawData['contactPhone'] ?? 'No phone number';
+
+    return ContactMessageWidget(
+      contactName: contactName,
+      contactPhone: contactPhone,
+      isCurrentUser: isCurrentUser,
+    );
+  }
+
+  Widget _buildLocationMessage() {
+    final rawData = (message as dynamic).toMap();
+    final latitude = rawData['latitude'] ?? 0.0;
+    final longitude = rawData['longitude'] ?? 0.0;
+    final mapsUrl = rawData['mapsUrl'];
+
+    return LocationMessageWidget(
+      latitude: latitude.toDouble(),
+      longitude: longitude.toDouble(),
+      mapsUrl: mapsUrl,
       isCurrentUser: isCurrentUser,
     );
   }
@@ -109,36 +171,124 @@ class ChatBubble extends StatelessWidget {
       return _buildTextMessage(); // Fallback to text if no file attachment
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // File preview
-        Container(
-          constraints: const BoxConstraints(maxWidth: 250, maxHeight: 200),
-          child: FilePreviewWidget(
-            fileAttachment: message.fileAttachment!,
-            showDownloadButton: true,
-            showFileName: true,
-            showFileSize: true,
-            onDownload: onFileDownload,
-            borderRadius: _getBorderRadius(),
-          ),
-        ),
-        // Text caption if present
-        if (message.hasText) ...[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-            child: Text(
-              message.message,
-              style: TextStyle(
-                fontSize: 14,
-                color: isCurrentUser ? Colors.white : Colors.black87,
+    final attachment = message.fileAttachment!;
+
+    // IMAGE
+    if (message.type == MessageType.image) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          GestureDetector(
+            onTap: onImageTap,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: CachedNetworkImage(
+                imageUrl: attachment.downloadUrl,
+                width: 250,
+                fit: BoxFit.cover,
+                placeholder: (context, url) => Container(
+                  width: 250,
+                  height: 200,
+                  color: Colors.grey.shade200,
+                  child: const Center(
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+                errorWidget: (context, url, error) => Container(
+                  width: 250,
+                  height: 200,
+                  color: Colors.grey.shade300,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.broken_image, size: 50, color: Colors.grey),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Failed to load image',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
-        ] else ...[
-          const SizedBox(height: 4),
+          if (message.message.isNotEmpty) ...[
+            SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Text(
+                message.message,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: isCurrentUser ? Colors.white : Colors.black87,
+                ),
+              ),
+            ),
+          ],
         ],
+      );
+    }
+
+    // VIDEO
+    if (message.type == MessageType.video) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => VideoPlayerScreen(
+                    videoUrl: attachment.downloadUrl,
+                    caption: message.message.isNotEmpty
+                        ? message.message
+                        : null,
+                  ),
+                ),
+              );
+            },
+            child: VideoMessageWidget(videoUrl: attachment.downloadUrl),
+          ),
+          if (message.message.isNotEmpty) ...[
+            SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Text(
+                message.message,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: isCurrentUser ? Colors.white : Colors.black87,
+                ),
+              ),
+            ),
+          ],
+        ],
+      );
+    }
+
+    // OTHER FILES (PDF, DOC, etc.)
+    return Row(
+      children: [
+        Icon(Icons.attach_file),
+        SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                attachment.originalFileName,
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              Text(
+                attachment.formattedFileSize,
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+        IconButton(icon: Icon(Icons.download), onPressed: onFileDownload),
       ],
     );
   }

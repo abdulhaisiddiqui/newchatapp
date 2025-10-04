@@ -23,6 +23,7 @@ abstract class CallManagerInterface {
     String userName,
     bool isVideo,
   );
+  void dispose(); // ✅ Added cleanup
 }
 
 /// CallManager is a singleton class that manages call state and operations
@@ -67,7 +68,20 @@ class CallManager implements CallManagerInterface {
 
   // Initialize the call manager
   Future<void> initialize() async {
+    if (_isInitialized) return;
+
+    // ✅ START LISTENING FOR INCOMING CALLS
+    _callService.startListeningForCalls((callId, userId, userName, isVideo) {
+      handleIncomingCall(callId, userId, userName, isVideo);
+    });
+
     _isInitialized = true;
+  }
+
+  // Dispose method for cleanup
+  void dispose() {
+    _callService.stopListeningForCalls();
+    _listeners.clear();
   }
 
   // Check if there's an active call

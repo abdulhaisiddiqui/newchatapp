@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class SettingScreen extends StatelessWidget {
   const SettingScreen({super.key});
@@ -84,7 +85,21 @@ class SettingScreen extends StatelessWidget {
                           children: [
                             CircleAvatar(
                               radius: 35,
-                              backgroundImage: NetworkImage(profilePic),
+                              backgroundColor: Colors.grey[300],
+                              child: ClipOval(
+                                child: CachedNetworkImage(
+                                  imageUrl: profilePic,
+                                  fit: BoxFit.cover,
+                                  width: 70,
+                                  height: 70,
+                                  placeholder: (context, url) =>
+                                      const CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                  errorWidget: (context, url, error) =>
+                                      const Icon(Icons.person, size: 35),
+                                ),
+                              ),
                             ),
                             const SizedBox(width: 15),
                             Expanded(

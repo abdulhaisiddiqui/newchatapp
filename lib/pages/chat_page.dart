@@ -1,11 +1,16 @@
+import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:chatapp/components/chat_bubble.dart';
 import 'package:chatapp/components/file_picker_widget.dart';
 import 'package:chatapp/components/call/call_screen_widget.dart';
 import 'package:chatapp/components/voice_recorder.dart';
+import 'package:chatapp/pages/location_share_page.dart';
+import 'package:chatapp/pages/contact_share_page.dart';
+import 'package:chatapp/pages/image_viewer_page.dart';
 import 'package:chatapp/services/chat/chat_service.dart';
 import 'package:chatapp/services/file/file_service.dart';
 import 'package:chatapp/services/call/call_manager.dart';
 import 'package:chatapp/model/message.dart';
+import 'package:chatapp/model/message_type.dart';
 import 'package:chatapp/components/user_status_indicator.dart';
 import 'package:chatapp/services/user/user_status_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -15,6 +20,7 @@ import 'dart:io';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:geolocator/geolocator.dart';
 
 class ChatPage extends StatefulWidget {
   final String receiverUserEmail;
@@ -43,13 +49,30 @@ class _ChatPageState extends State<ChatPage> {
   String? _statusMessage;
   bool _isTyping = false;
   Timer? _typingTimer;
+  Message? _replyToMessage;
+  Map<String, String> _messageReactions = {};
+  List<String> _chatImageUrls = [];
 
   void sendMessage() async {
     if (_messageController.text.isNotEmpty) {
-      await _chatService.sendMessage(
-        widget.receiverUserId,
-        _messageController.text,
-      );
+      if (_replyToMessage != null) {
+        // Send reply message
+        await _chatService.sendReplyMessage(
+          receiverId: widget.receiverUserId,
+          message: _messageController.text,
+          replyToMessageId: _replyToMessage!.timestamp.millisecondsSinceEpoch
+              .toString(),
+        );
+        setState(() {
+          _replyToMessage = null;
+        });
+      } else {
+        // Send regular message
+        await _chatService.sendMessage(
+          widget.receiverUserId,
+          _messageController.text,
+        );
+      }
       _messageController.clear();
     }
   }
@@ -314,11 +337,156 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
+  void _handleSwipeToReply(Message message) {
+    setState(() {
+      _replyToMessage = message;
+    });
+  }
+
+  void _handleLongPressReaction(Message message) async {
+    final selectedReaction = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Add Reaction',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: ['❤️', '😂', '👍', '🔥', '😢', '😮', '😡'].map((emoji) {
+                return GestureDetector(
+                  onTap: () => Navigator.of(context).pop(emoji),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      color: Colors.grey.shade100,
+                    ),
+                    child: Text(emoji, style: const TextStyle(fontSize: 24)),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (selectedReaction != null) {
+      setState(() {
+        _messageReactions[message.timestamp.millisecondsSinceEpoch.toString()] =
+            selectedReaction;
+      });
+      // TODO: Save reaction to Firebase for persistence across users
+    }
+  }
+
+  void _cancelReply() {
+    setState(() {
+      _replyToMessage = null;
+    });
+  }
+
+  void _openImageViewer(String imageUrl) {
+    // Collect all image URLs from current chat messages
+    _collectChatImageUrls();
+
+    final initialIndex = _chatImageUrls.indexOf(imageUrl);
+    if (initialIndex >= 0) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ImageViewerPage(
+            imageUrls: _chatImageUrls,
+            initialIndex: initialIndex,
+          ),
+        ),
+      );
+    }
+  }
+
+  void _collectChatImageUrls() {
+    _chatImageUrls.clear();
+    // This would need to be implemented to collect all image URLs from the current chat
+    // For now, we'll just add the current image
+  }
+
+  Future<void> _pickAndShareContact() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ContactSharePage()),
+    );
+
+    if (result != null && result is Map<String, dynamic>) {
+      try {
+        final name = result['name'] as String?;
+        final phone = result['phone'] as String?;
+
+        if (name != null && phone != null) {
+          await _chatService.sendContactMessage(
+            receiverId: widget.receiverUserId,
+            contactName: name,
+            contactPhone: phone,
+          );
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Contact shared successfully')),
+          );
+        }
+      } catch (e) {
+        _showErrorSnackBar('Failed to share contact: $e');
+      }
+    }
+  }
+
+  Future<void> _shareLocation() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const LocationSharePage()),
+    );
+
+    if (result != null && result is Map<String, dynamic>) {
+      try {
+        final latitude = result['latitude'] as double;
+        final longitude = result['longitude'] as double;
+
+        final googleMapsUrl =
+            "https://www.google.com/maps/search/?api=1&query=$latitude,$longitude";
+
+        await _chatService.sendLocationMessage(
+          receiverId: widget.receiverUserId,
+          latitude: latitude,
+          longitude: longitude,
+          mapsUrl: googleMapsUrl,
+        );
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Location shared successfully')),
+        );
+      } catch (e) {
+        _showErrorSnackBar('Failed to share location: $e');
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     // Add listener to detect typing
     _messageController.addListener(_onTypingChanged);
+
+    // Clear notifications for this chat and mark messages as read
+    _clearNotificationsAndMarkAsRead();
   }
 
   void _onTypingChanged() {
@@ -347,6 +515,18 @@ class _ChatPageState extends State<ChatPage> {
       final chatRoomId = _getChatRoomId();
       _userStatusService.setTypingStatus(chatRoomId, _isTyping);
     }
+  }
+
+  void _clearNotificationsAndMarkAsRead() async {
+    final chatRoomId = _getChatRoomId();
+
+    // Clear notifications for this chat
+    await AwesomeNotifications().dismissNotificationsByGroupKey(
+      'chat_$chatRoomId',
+    );
+
+    // Mark messages as read in Firestore
+    await _chatService.markMessagesAsRead(chatRoomId, widget.receiverUserId);
   }
 
   @override
@@ -430,9 +610,52 @@ class _ChatPageState extends State<ChatPage> {
           // ✅ Chat Messages (Firestore Stream)
           Expanded(child: _buildMessageList()),
 
+          // Reply preview
+          if (_replyToMessage != null)
+            Container(
+              color: Colors.grey.shade100,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.reply, color: Colors.green, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Replying to ${_replyToMessage!.senderEmail}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green,
+                          ),
+                        ),
+                        Text(
+                          _replyToMessage!.message.isNotEmpty
+                              ? _replyToMessage!.message
+                              : 'Attachment',
+                          style: const TextStyle(fontSize: 14),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 20),
+                    onPressed: _cancelReply,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
+              ),
+            ),
+
           // ✅ Bottom Input Bar (from MessageScreen)
           Container(
-            height: 90,
+            height: _replyToMessage != null ? 120 : 90,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: const BoxDecoration(color: Colors.white),
             child: Row(
@@ -467,6 +690,13 @@ class _ChatPageState extends State<ChatPage> {
                               ),
                               maxLines: null,
                               textInputAction: TextInputAction.send,
+                              onChanged: (text) {
+                                // Update typing status
+                                _userStatusService.setTypingStatus(
+                                  _getChatRoomId(),
+                                  text.isNotEmpty,
+                                );
+                              },
                               onSubmitted: (_) =>
                                   _isUploading ? null : sendMessage(),
                             ),
@@ -494,6 +724,26 @@ class _ChatPageState extends State<ChatPage> {
                       ],
                     ),
                   ),
+                ),
+                const SizedBox(width: 10),
+                IconButton(
+                  onPressed: _pickAndShareContact,
+                  icon: const Icon(
+                    Icons.contacts,
+                    color: Colors.black,
+                    size: 24,
+                  ),
+                  tooltip: 'Share contact',
+                ),
+                const SizedBox(width: 10),
+                IconButton(
+                  onPressed: _shareLocation,
+                  icon: const Icon(
+                    Icons.location_on,
+                    color: Colors.black,
+                    size: 24,
+                  ),
+                  tooltip: 'Share location',
                 ),
                 const SizedBox(width: 10),
                 const Icon(
@@ -539,10 +789,10 @@ class _ChatPageState extends State<ChatPage> {
 
         // Messages list
         Expanded(
-          child: StreamBuilder(
-            stream: _chatService.getMessages(
-              widget.receiverUserId,
+          child: StreamBuilder<List<Message>>(
+            stream: _chatService.getMessagesStream(
               currentUser.uid,
+              widget.receiverUserId,
             ),
             builder: (context, snapshot) {
               if (snapshot.hasError) {
@@ -566,7 +816,7 @@ class _ChatPageState extends State<ChatPage> {
                 return const Center(child: CircularProgressIndicator());
               }
 
-              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
                 return const Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -585,10 +835,27 @@ class _ChatPageState extends State<ChatPage> {
                 );
               }
 
+              // Show notification for new messages from other users
+              final messages = snapshot.data!;
+              if (messages.isNotEmpty) {
+                final latestMessage = messages.last;
+                if (latestMessage.senderId != currentUser.uid &&
+                    !latestMessage.isRead) {
+                  // Show local notification for new message
+                  _chatService.showMessageNotification(
+                    senderName: widget.receiverUserEmail,
+                    message: latestMessage.message,
+                    chatRoomId: _getChatRoomId(),
+                    receiverId: widget.receiverUserId,
+                    receiverEmail: widget.receiverUserEmail,
+                  );
+                }
+              }
+
               return ListView(
                 padding: const EdgeInsets.all(16),
-                children: snapshot.data!.docs
-                    .map((document) => _buildMessageItem(document))
+                children: messages
+                    .map((message) => _buildMessageItemFromMessage(message))
                     .toList(),
               );
             },
@@ -598,7 +865,63 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
-  // 🔹 Firestore Single Message
+  // 🔹 Firestore Single Message from Message object
+  Widget _buildMessageItemFromMessage(Message message) {
+    final currentUser = _firebaseAuth.currentUser;
+    if (currentUser == null) {
+      return const SizedBox.shrink(); // Don't show messages if user not authenticated
+    }
+
+    bool isCurrentUser = message.senderId == currentUser.uid;
+    final messageId = message.timestamp.millisecondsSinceEpoch.toString();
+    final reaction = _messageReactions[messageId];
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Column(
+        crossAxisAlignment: isCurrentUser
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
+        children: [
+          ChatBubble(
+            message: message,
+            isCurrentUser: isCurrentUser,
+            onFileDownload: () {
+              // Handle file download
+              if (message.fileAttachment != null) {
+                _downloadFile(message.fileAttachment!);
+              }
+            },
+            onSwipeToReply: _handleSwipeToReply,
+            onLongPressReaction: _handleLongPressReaction,
+            onImageTap:
+                message.fileAttachment != null &&
+                    message.type == MessageType.image
+                ? () => _openImageViewer(message.fileAttachment!.downloadUrl)
+                : null,
+          ),
+          if (reaction != null)
+            Padding(
+              padding: EdgeInsets.only(
+                left: isCurrentUser ? 0 : 16,
+                right: isCurrentUser ? 16 : 0,
+                top: 4,
+              ),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(reaction, style: const TextStyle(fontSize: 14)),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // 🔹 Firestore Single Message from DocumentSnapshot (legacy)
   Widget _buildMessageItem(DocumentSnapshot document) {
     final docData = document.data();
     if (docData == null) {
@@ -617,19 +940,7 @@ class _ChatPageState extends State<ChatPage> {
     // Convert Firestore data to Message object
     Message message = Message.fromMap(data);
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: ChatBubble(
-        message: message,
-        isCurrentUser: isCurrentUser,
-        onFileDownload: () {
-          // Handle file download
-          if (message.fileAttachment != null) {
-            _downloadFile(message.fileAttachment!);
-          }
-        },
-      ),
-    );
+    return _buildMessageItemFromMessage(message);
   }
 
   void _downloadFile(fileAttachment) async {

@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -175,14 +176,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   onTap: _pickImage,
                                   child: CircleAvatar(
                                     radius: 30,
-                                    backgroundImage: _imageFile != null
-                                        ? FileImage(_imageFile!)
-                                              as ImageProvider
-                                        : (profilePic.isNotEmpty
-                                              ? NetworkImage(profilePic)
-                                              : const AssetImage(
-                                                  "assets/images/user.png",
-                                                )),
+                                    backgroundColor: Colors.grey[300],
+                                    child: ClipOval(
+                                      child: _imageFile != null
+                                          ? Image.file(
+                                              _imageFile!,
+                                              width: 60,
+                                              height: 60,
+                                              fit: BoxFit.cover,
+                                            )
+                                          : (profilePic.isNotEmpty
+                                                ? CachedNetworkImage(
+                                                    imageUrl: profilePic,
+                                                    fit: BoxFit.cover,
+                                                    width: 60,
+                                                    height: 60,
+                                                    placeholder: (context, url) =>
+                                                        const CircularProgressIndicator(
+                                                          strokeWidth: 2,
+                                                        ),
+                                                    errorWidget:
+                                                        (
+                                                          context,
+                                                          url,
+                                                          error,
+                                                        ) => Image.asset(
+                                                          "assets/images/user.png",
+                                                          width: 60,
+                                                          height: 60,
+                                                        ),
+                                                  )
+                                                : Image.asset(
+                                                    "assets/images/user.png",
+                                                    width: 60,
+                                                    height: 60,
+                                                  )),
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(width: 15),

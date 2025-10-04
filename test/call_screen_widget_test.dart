@@ -11,28 +11,35 @@ class MockCallManager implements CallManagerInterface {
   Future<void> initialize() async {}
   bool get isInCall => false;
   CallInfo? get currentCall => null;
-  
+
   void registerCallStateListener(CallStateListener listener) {}
   void unregisterCallStateListener(CallStateListener listener) {}
-  
+
   Future<bool> startAudioCall(String userId, String userName) async {
     return true;
   }
-  
+
   Future<bool> startVideoCall(String userId, String userName) async {
     return true;
   }
-  
+
   Future<bool> answerCall() async => true;
   Future<bool> endCall() async => true;
   Future<bool> declineCall() async => true;
-  
+
   Future<List<CallHistoryEntry>> getCallHistory(String userId) async {
     return _sampleHistory;
   }
-  
-  void handleIncomingCall(String callId, String userId, String userName, bool isVideo) {}
-  
+
+  void handleIncomingCall(
+    String callId,
+    String userId,
+    String userName,
+    bool isVideo,
+  ) {}
+
+  void dispose() {}
+
   // Track method calls for verification
   final List<String> methodCalls = [];
 }
@@ -92,7 +99,9 @@ void main() {
     expect(find.byIcon(Icons.call_missed), findsOneWidget); // missed
   });
 
-  testWidgets('CallScreen initiates audio call on tap', (WidgetTester tester) async {
+  testWidgets('CallScreen initiates audio call on tap', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(const MaterialApp(home: CallScreen()));
     await tester.pumpAndSettle();
 
@@ -101,7 +110,9 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('CallScreen initiates video call on tap', (WidgetTester tester) async {
+  testWidgets('CallScreen initiates video call on tap', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(const MaterialApp(home: CallScreen()));
     await tester.pumpAndSettle();
 

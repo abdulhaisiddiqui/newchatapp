@@ -1,7 +1,9 @@
 import 'dart:io';
+import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/material.dart';
 import 'package:chatapp/services/error_handler.dart';
 
 class StoryService with ErrorHandler {
@@ -48,6 +50,28 @@ class StoryService with ErrorHandler {
         throw Exception(msg);
       },
     );
+
+    // Show notification for new story
+    await _showStoryNotification(username);
+  }
+
+  // 📬 Show local notification for new story
+  Future<void> _showStoryNotification(String username) async {
+    try {
+      await AwesomeNotifications().createNotification(
+        content: NotificationContent(
+          id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
+          channelKey: 'stories',
+          title: 'New Story Posted!',
+          body: '$username added a new story.',
+          notificationLayout: NotificationLayout.BigText,
+          displayOnForeground: false, // Don't show when app is in foreground
+          displayOnBackground: true,
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error showing story notification: $e');
+    }
   }
 
   Stream<List<Map<String, dynamic>>> getVisibleStories(

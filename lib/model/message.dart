@@ -15,6 +15,7 @@ class Message {
   final String? replyToMessageId;
   final bool isEdited;
   final Timestamp? editedAt;
+  final bool isRead;
 
   Message({
     required this.senderId,
@@ -27,6 +28,7 @@ class Message {
     this.replyToMessageId,
     this.isEdited = false,
     this.editedAt,
+    this.isRead = false,
   });
 
   // Convert to a map for Firestore
@@ -42,6 +44,7 @@ class Message {
       'replyToMessageId': replyToMessageId,
       'isEdited': isEdited,
       'editedAt': editedAt,
+      'isRead': isRead,
     };
   }
 
@@ -60,6 +63,7 @@ class Message {
       replyToMessageId: map['replyToMessageId'],
       isEdited: map['isEdited'] ?? false,
       editedAt: map['editedAt'],
+      isRead: map['isRead'] ?? false,
     );
   }
 
@@ -80,6 +84,7 @@ class Message {
     String? replyToMessageId,
     bool? isEdited,
     Timestamp? editedAt,
+    bool? isRead,
   }) {
     return Message(
       senderId: senderId ?? this.senderId,
@@ -92,6 +97,7 @@ class Message {
       replyToMessageId: replyToMessageId ?? this.replyToMessageId,
       isEdited: isEdited ?? this.isEdited,
       editedAt: editedAt ?? this.editedAt,
+      isRead: isRead ?? this.isRead,
     );
   }
 

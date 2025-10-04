@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:chatapp/model/file_attachment.dart';
 import 'package:chatapp/components/file_icon_widget.dart';
 import 'package:chatapp/components/thumbnail_generator.dart';
@@ -528,19 +529,15 @@ class FullScreenFilePreview extends StatelessWidget {
     if (fileAttachment.thumbnailUrl != null) {
       // In a real implementation, you would load the full-resolution image
       return InteractiveViewer(
-        child: Image.network(
-          fileAttachment.downloadUrl,
+        child: CachedNetworkImage(
+          imageUrl: fileAttachment.downloadUrl,
           fit: BoxFit.contain,
-          loadingBuilder: (context, child, loadingProgress) {
-            if (loadingProgress == null) return child;
-            return const Center(child: CircularProgressIndicator());
-          },
-          errorBuilder: (context, error, stackTrace) {
-            return LargeFileIcon(
-              fileName: fileAttachment.originalFileName,
-              mimeType: fileAttachment.mimeType,
-            );
-          },
+          placeholder: (context, url) =>
+              const Center(child: CircularProgressIndicator()),
+          errorWidget: (context, url, error) => LargeFileIcon(
+            fileName: fileAttachment.originalFileName,
+            mimeType: fileAttachment.mimeType,
+          ),
         ),
       );
     }

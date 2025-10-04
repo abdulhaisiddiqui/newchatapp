@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -186,8 +187,19 @@ class _SearchScreenState extends State<SearchScreen> {
           children: [
             CircleAvatar(
               radius: 28,
-              backgroundImage: NetworkImage(avatar),
               backgroundColor: Colors.grey[300],
+              child: ClipOval(
+                child: CachedNetworkImage(
+                  imageUrl: avatar,
+                  fit: BoxFit.cover,
+                  width: 56,
+                  height: 56,
+                  placeholder: (context, url) =>
+                      const CircularProgressIndicator(strokeWidth: 2),
+                  errorWidget: (context, url, error) =>
+                      const Icon(Icons.person, size: 28),
+                ),
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -242,8 +254,19 @@ class _SearchScreenState extends State<SearchScreen> {
                       top: 0,
                       child: CircleAvatar(
                         radius: 20,
-                        backgroundImage: NetworkImage(avatars[0]),
                         backgroundColor: Colors.grey[300],
+                        child: ClipOval(
+                          child: CachedNetworkImage(
+                            imageUrl: avatars[0],
+                            fit: BoxFit.cover,
+                            width: 40,
+                            height: 40,
+                            placeholder: (context, url) =>
+                                const CircularProgressIndicator(strokeWidth: 2),
+                            errorWidget: (context, url, error) =>
+                                const Icon(Icons.person, size: 20),
+                          ),
+                        ),
                       ),
                     ),
                   if (avatars.length > 1)
@@ -252,8 +275,19 @@ class _SearchScreenState extends State<SearchScreen> {
                       bottom: 0,
                       child: CircleAvatar(
                         radius: 20,
-                        backgroundImage: NetworkImage(avatars[1]),
                         backgroundColor: Colors.grey[300],
+                        child: ClipOval(
+                          child: CachedNetworkImage(
+                            imageUrl: avatars[1],
+                            fit: BoxFit.cover,
+                            width: 40,
+                            height: 40,
+                            placeholder: (context, url) =>
+                                const CircularProgressIndicator(strokeWidth: 2),
+                            errorWidget: (context, url, error) =>
+                                const Icon(Icons.person, size: 20),
+                          ),
+                        ),
                       ),
                     ),
                   if (avatars.length > 2)
@@ -262,8 +296,19 @@ class _SearchScreenState extends State<SearchScreen> {
                       bottom: 0,
                       child: CircleAvatar(
                         radius: 14,
-                        backgroundImage: NetworkImage(avatars[2]),
                         backgroundColor: Colors.grey[300],
+                        child: ClipOval(
+                          child: CachedNetworkImage(
+                            imageUrl: avatars[2],
+                            fit: BoxFit.cover,
+                            width: 28,
+                            height: 28,
+                            placeholder: (context, url) =>
+                                const CircularProgressIndicator(strokeWidth: 2),
+                            errorWidget: (context, url, error) =>
+                                const Icon(Icons.person, size: 14),
+                          ),
+                        ),
                       ),
                     ),
                 ],

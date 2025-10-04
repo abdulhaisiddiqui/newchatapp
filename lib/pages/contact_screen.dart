@@ -3,6 +3,7 @@ import 'package:chatapp/pages/profile_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 
 class ContactScreen extends StatefulWidget {
@@ -139,11 +140,23 @@ class _ContactScreenState extends State<ContactScreen> {
           leading: Stack(
             children: [
               CircleAvatar(
-                backgroundImage: NetworkImage(
-                  data['profilePic'] as String? ??
-                      'assets/images/google-logo.png',
-                ),
+                backgroundColor: Colors.grey[300],
                 radius: 25,
+                child: ClipOval(
+                  child: CachedNetworkImage(
+                    imageUrl: data['profilePic'] as String? ?? '',
+                    fit: BoxFit.cover,
+                    width: 50,
+                    height: 50,
+                    placeholder: (context, url) =>
+                        const CircularProgressIndicator(strokeWidth: 2),
+                    errorWidget: (context, url, error) => Image.asset(
+                      'assets/images/user.png',
+                      width: 50,
+                      height: 50,
+                    ),
+                  ),
+                ),
               ),
               const Positioned(
                 bottom: 0,

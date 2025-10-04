@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../components/call/incoming_call_dialog.dart';
@@ -287,16 +288,28 @@ class _CallScreenState extends State<CallScreen> implements CallStateListener {
           // Avatar with group indicator
           CircleAvatar(
             radius: MediaQuery.of(context).size.width * 0.06,
-            backgroundImage: call.userAvatar != null
-                ? NetworkImage(call.userAvatar!)
-                : null,
-            child: call.userAvatar == null
-                ? Icon(
+            backgroundColor: Colors.grey[300],
+            child: call.userAvatar != null
+                ? ClipOval(
+                    child: CachedNetworkImage(
+                      imageUrl: call.userAvatar!,
+                      fit: BoxFit.cover,
+                      width: MediaQuery.of(context).size.width * 0.12,
+                      height: MediaQuery.of(context).size.width * 0.12,
+                      placeholder: (context, url) =>
+                          const CircularProgressIndicator(strokeWidth: 2),
+                      errorWidget: (context, url, error) => Icon(
+                        Icons.person,
+                        size: MediaQuery.of(context).size.width * 0.06,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  )
+                : Icon(
                     Icons.person,
                     size: MediaQuery.of(context).size.width * 0.06,
-                    color: Colors.white,
-                  )
-                : null,
+                    color: Colors.grey,
+                  ),
           ),
 
           SizedBox(width: MediaQuery.of(context).size.width * 0.03),

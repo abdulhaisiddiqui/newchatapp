@@ -1,0 +1,72 @@
+  //     setState(() => _isUploading = false);
+  //     Navigator.of(context).pop(); // Close the upload page
+  //   } catch (e) {
+  //     print('Error uploading story: $e');
+  //     setState(() => _isUploading = false);
+  //     ScaffoldMessenger.of(context).showSnackBar(
+  //       SnackBar(content: Text('Failed to upload story. Please try again.')),
+  //     );
+  //   }
+  // }
+
+  // // ✅ Pick video from gallery/camera
+  // Future<void> _pickVideo(ImageSource source) async {
+  //   final picked = await _picker.pickVideo(source: source, maxDuration: const Duration(seconds: 30));
+  //   if (picked != null) {
+  //     setState(() {
+  //       _selectedFile = File(picked.path);
+  //     });
+  //   }
+  // }
+
+  // // ✅ Upload video using StoryService
+  // Future<void> _uploadVideoStory() async {
+  //   if (_selectedFile == null) return;
+
+  //   setState(() => _isUploading = true);
+
+  //   try {
+  //     await _storyService.uploadStory(
+  //       userId: _currentUserId!,
+  //       username: _currentUsername!,
+  //       file: _selectedFile!,
+  //       type: "video",
+  //     );
+  //     setState(() => _isUploading = false);
+  //     Navigator.of(context).pop(); // Close the upload page
+  //   } catch (e) {
+  //     print('Error uploading story: $e');
+  //     setState(() => _isUploading = false);
+  //     ScaffoldMessenger.of(context).showSnackBar(
+  //       SnackBar(content: Text('Failed to upload story. Please try again.')),
+  //     );
+  //   }
+  // }
+    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Story uploaded successfully!")),
+      );
+      Navigator.pop(context); // back to Home
+    }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Failed to upload: $e")));
+    }
+  } finally {
+    if (mounted) {
+      setState(() => _isUploading = false);
+    }
+  }
+  }
+        );
+  }
+  }
+  }
+  }
+  }
+  }
+  }        );
+  } 
