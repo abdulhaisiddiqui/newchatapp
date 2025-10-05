@@ -167,7 +167,7 @@ class _AnimatedTypingIndicatorState extends State<AnimatedTypingIndicator>
               height: 8,
               margin: const EdgeInsets.symmetric(horizontal: 2),
               decoration: BoxDecoration(
-                color: Colors.grey.withOpacity(opacity),
+                color: Colors.grey.withValues(alpha: opacity),
                 shape: BoxShape.circle,
               ),
             );

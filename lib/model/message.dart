@@ -50,12 +50,23 @@ class Message {
 
   // Create from Firestore map
   factory Message.fromMap(Map<String, dynamic> map) {
+    // Handle timestamp conversion - could be Timestamp, int, or null
+    Timestamp? timestamp;
+    final timestampValue = map['timestamp'];
+    if (timestampValue is Timestamp) {
+      timestamp = timestampValue;
+    } else if (timestampValue is int) {
+      timestamp = Timestamp.fromMillisecondsSinceEpoch(timestampValue);
+    } else {
+      timestamp = Timestamp.now();
+    }
+
     return Message(
       senderId: map['senderId'] ?? '',
       senderEmail: map['senderEmail'] ?? '',
       receiverId: map['receiverId'] ?? '',
       message: map['message'] ?? '',
-      timestamp: map['timestamp'] ?? Timestamp.now(),
+      timestamp: timestamp,
       type: MessageType.fromString(map['type'] ?? 'text'),
       fileAttachment: map['fileAttachment'] != null
           ? FileAttachment.fromMap(map['fileAttachment'])

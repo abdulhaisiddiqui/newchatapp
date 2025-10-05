@@ -85,6 +85,7 @@ dependencies:
   flutter_cache_manager: ^3.4.1
   intl: ^0.20.2
   sentry: ^9.6.0
+  connectivity_plus: ^6.0.3
   chatview: ^2.5.0
 
 dev_dependencies:

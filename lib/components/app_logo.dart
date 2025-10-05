@@ -24,7 +24,7 @@ class AppLogo extends StatelessWidget {
             borderRadius: BorderRadius.circular(size * 0.2),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF1976D2).withOpacity(0.3),
+                color: const Color(0xFF1976D2).withValues(alpha: 0.3),
                 spreadRadius: 2,
                 blurRadius: 10,
                 offset: const Offset(0, 4),
@@ -84,7 +84,7 @@ class ModernAppIcon extends StatelessWidget {
         borderRadius: BorderRadius.circular(size * 0.25),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF1976D2).withOpacity(0.4),
+            color: const Color(0xFF1976D2).withValues(alpha: 0.4),
             spreadRadius: 3,
             blurRadius: 15,
             offset: const Offset(0, 6),
@@ -102,7 +102,7 @@ class ModernAppIcon extends StatelessWidget {
               width: size * 0.3,
               height: size * 0.3,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
+                color: Colors.white.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(size * 0.1),
               ),
             ),

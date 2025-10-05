@@ -26,13 +26,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _pickImage() async {
     // Request permissions for Android 13+
     List<Permission> permissionsToCheck = [Permission.photos];
-    if (Platform.isAndroid) {
-      // For older Android versions, photos permission might not be available
-      try {
-        await Permission.photos.status;
-      } catch (e) {
-        permissionsToCheck = [Permission.storage];
+    try {
+      if (Platform.isAndroid) {
+        // For older Android versions, photos permission might not be available
+        try {
+          await Permission.photos.status;
+        } catch (e) {
+          permissionsToCheck = [Permission.storage];
+        }
       }
+    } catch (e) {
+      // Platform not available, use storage as fallback
+      permissionsToCheck = [Permission.storage];
     }
 
     bool hasPermission = true;

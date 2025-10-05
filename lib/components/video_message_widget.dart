@@ -66,7 +66,7 @@ class _VideoMessageWidgetState extends State<VideoMessageWidget> {
                           ? Icons.pause_circle_outline
                           : Icons.play_circle_outline,
                       size: 60,
-                      color: Colors.white.withOpacity(0.8),
+                      color: Colors.white.withValues(alpha: 0.8),
                     ),
                   ),
                 ),

@@ -28,15 +28,34 @@ class CustomMessage {
     Map<String, dynamic> data,
     ChatUser sender,
   ) {
-    final customType = _parseCustomMessageType(data['customType'] ?? 'text');
+    final customType = _parseCustomMessageType(
+      data['customType'] as String? ?? 'text',
+    );
+
+    // Handle timestamp conversion safely
+    int timestampMs;
+    final timestampValue = data['timestamp'];
+    if (timestampValue is int) {
+      timestampMs = timestampValue;
+    } else if (timestampValue is DateTime) {
+      timestampMs = timestampValue.millisecondsSinceEpoch;
+    } else {
+      timestampMs = DateTime.now().millisecondsSinceEpoch;
+    }
+
+    // Handle extraData safely
+    Map<String, dynamic>? extraData;
+    if (data['extraData'] is Map<String, dynamic>) {
+      extraData = data['extraData'] as Map<String, dynamic>;
+    }
 
     return CustomMessage(
-      id: data['id'] ?? data['timestamp']?.toString() ?? '',
-      message: data['message'] ?? '',
+      id: data['id'] as String? ?? timestampMs.toString(),
+      message: data['message'] as String? ?? '',
       sender: sender,
-      createdAt: DateTime.fromMillisecondsSinceEpoch(data['timestamp'] ?? 0),
+      createdAt: DateTime.fromMillisecondsSinceEpoch(timestampMs),
       customType: customType,
-      extraData: data['extraData'] as Map<String, dynamic>?,
+      extraData: extraData,
       messageType: _getMessageType(customType),
     );
   }

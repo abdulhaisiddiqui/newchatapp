@@ -95,21 +95,38 @@ class FileAttachment {
 
   // Create from Firestore map
   factory FileAttachment.fromMap(Map<String, dynamic> map) {
+    // Handle timestamp conversion safely
+    Timestamp uploadedAt;
+    final timestampValue = map['uploadedAt'];
+    if (timestampValue is Timestamp) {
+      uploadedAt = timestampValue;
+    } else if (timestampValue is int) {
+      uploadedAt = Timestamp.fromMillisecondsSinceEpoch(timestampValue);
+    } else {
+      uploadedAt = Timestamp.now();
+    }
+
+    // Handle metadata safely
+    Map<String, dynamic>? metadata;
+    if (map['metadata'] is Map<String, dynamic>) {
+      metadata = map['metadata'] as Map<String, dynamic>;
+    }
+
     return FileAttachment(
-      fileId: map['fileId'] ?? '',
-      fileName: map['fileName'] ?? '',
-      originalFileName: map['originalFileName'] ?? '',
-      fileExtension: map['fileExtension'] ?? '',
-      fileSizeBytes: map['fileSizeBytes'] ?? 0,
-      mimeType: map['mimeType'] ?? '',
-      downloadUrl: map['downloadUrl'] ?? '',
-      thumbnailUrl: map['thumbnailUrl'],
-      metadata: map['metadata'],
-      uploadedAt: map['uploadedAt'] ?? Timestamp.now(),
-      uploadedBy: map['uploadedBy'] ?? '',
-      isCompressed: map['isCompressed'] ?? false,
-      compressionRatio: map['compressionRatio'],
-      status: FileStatus.fromString(map['status'] ?? 'uploaded'),
+      fileId: map['fileId'] as String? ?? '',
+      fileName: map['fileName'] as String? ?? '',
+      originalFileName: map['originalFileName'] as String? ?? '',
+      fileExtension: map['fileExtension'] as String? ?? '',
+      fileSizeBytes: map['fileSizeBytes'] as int? ?? 0,
+      mimeType: map['mimeType'] as String? ?? '',
+      downloadUrl: map['downloadUrl'] as String? ?? '',
+      thumbnailUrl: map['thumbnailUrl'] as String?,
+      metadata: metadata,
+      uploadedAt: uploadedAt,
+      uploadedBy: map['uploadedBy'] as String? ?? '',
+      isCompressed: map['isCompressed'] as bool? ?? false,
+      compressionRatio: map['compressionRatio'] as String?,
+      status: FileStatus.fromString(map['status'] as String? ?? 'uploaded'),
     );
   }
 

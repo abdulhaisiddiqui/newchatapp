@@ -78,7 +78,7 @@ class _FilePickerWidgetState extends State<FilePickerWidget> {
           ),
           borderRadius: BorderRadius.circular(12),
           color: _isDragOver
-              ? Theme.of(context).primaryColor.withOpacity(0.1)
+              ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
               : Colors.grey.shade50,
         ),
         child: widget.child ?? _buildDefaultDropZone(),

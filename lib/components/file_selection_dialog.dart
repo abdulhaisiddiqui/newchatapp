@@ -147,7 +147,7 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
               width: 60,
               height: 60,
               decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
+                color: color.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Icon(icon, color: color, size: 28),
@@ -170,14 +170,19 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
     try {
       // Check permissions - use photos permission for Android 13+, storage for older
       List<Permission> permissionsToCheck = [Permission.photos];
-      if (Platform.isAndroid) {
-        // For older Android versions, photos permission might not be available
-        // so we fall back to storage permission
-        try {
-          await Permission.photos.status;
-        } catch (e) {
-          permissionsToCheck = [Permission.storage];
+      try {
+        if (Platform.isAndroid) {
+          // For older Android versions, photos permission might not be available
+          // so we fall back to storage permission
+          try {
+            await Permission.photos.status;
+          } catch (e) {
+            permissionsToCheck = [Permission.storage];
+          }
         }
+      } catch (e) {
+        // Platform not available (e.g., during testing), use storage as fallback
+        permissionsToCheck = [Permission.storage];
       }
 
       if (!await _checkPermissions(permissionsToCheck)) {
@@ -244,14 +249,18 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
     try {
       // Check permissions - for Android 13+, file_picker handles permissions internally
       // For older Android versions, we need storage permission
-      if (Platform.isAndroid) {
-        // Check Android version
-        // For simplicity, we'll request storage permission which works for older versions
-        // For Android 13+, the system file picker will handle permission requests
-        if (!await _checkPermissions([Permission.storage])) {
-          _showPermissionDeniedDialog();
-          return;
+      try {
+        if (Platform.isAndroid) {
+          // Check Android version
+          // For simplicity, we'll request storage permission which works for older versions
+          // For Android 13+, the system file picker will handle permission requests
+          if (!await _checkPermissions([Permission.storage])) {
+            _showPermissionDeniedDialog();
+            return;
+          }
         }
+      } catch (e) {
+        // Platform not available, skip permission check
       }
 
       FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -327,9 +336,13 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
     try {
       // Check permissions - for Android 13+, use audio permission
       List<Permission> permissionsToCheck = [Permission.storage];
-      if (Platform.isAndroid) {
-        // For Android 13+, we can use Permission.audio for audio files
-        permissionsToCheck = [Permission.audio];
+      try {
+        if (Platform.isAndroid) {
+          // For Android 13+, we can use Permission.audio for audio files
+          permissionsToCheck = [Permission.audio];
+        }
+      } catch (e) {
+        // Platform not available, use storage as fallback
       }
 
       if (!await _checkPermissions(permissionsToCheck)) {

@@ -1,4 +1,5 @@
 import 'package:chatapp/pages/profile_screen.dart';
+import 'package:chatapp/pages/chat_page_chatview.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -69,7 +70,8 @@ class SettingScreen extends StatelessWidget {
                   }
 
                   final userData = snapshot.data!;
-                  final username = userData["username"] ?? userData["email"];
+                  final username =
+                      userData["username"] ?? userData["email"] ?? "User";
                   final profilePic =
                       userData["profilePic"] ??
                       "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQxSFDJsQuUfNJriz0KiaTD28GR82xL1fW-nvsEF9GwaI_sq6SkPloo&usqp=CAE&s"; // default avatar
@@ -194,6 +196,12 @@ class SettingScreen extends StatelessWidget {
                         "Test error reporting and diagnostics",
                         onTap: () => _showDebugDialog(context),
                       ),
+                      buildSettingsTile(
+                        Icons.chat_bubble_outline,
+                        "Test ChatView",
+                        "Test alternative chat implementation",
+                        onTap: () => _navigateToChatView(context),
+                      ),
                     ],
                   );
                 },
@@ -237,6 +245,19 @@ class SettingScreen extends StatelessWidget {
             child: const Text('Open Settings'),
           ),
         ],
+      ),
+    );
+  }
+
+  void _navigateToChatView(BuildContext context) {
+    // For testing, navigate to a sample chat with a dummy user
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ChatPageChatView(
+          receiverUserEmail: 'test@example.com',
+          receiverUserId: 'test_user_id',
+        ),
       ),
     );
   }

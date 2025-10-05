@@ -13,8 +13,10 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../services/story/story_viewer.dart';
 import '../services/chat/chat_service.dart';
 import '../services/secure_storage_service.dart';
-import 'chat_page.dart';
+import 'chat_page_chatview.dart';
+import 'group_chat_page.dart';
 import '../components/user_status_indicator.dart';
+import 'contact_screen.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -181,30 +183,100 @@ class _HomePageState extends State<HomePage> {
         MediaQuery.of(context).orientation == Orientation.portrait;
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: const Color(0xFF0A0A0A),
       appBar: AppBar(
-        backgroundColor: Colors.black,
+        backgroundColor: const Color(0xFF0A0A0A),
         elevation: 0,
-        title: const Text('Home', style: TextStyle(color: Colors.white)),
-        centerTitle: true,
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.chat_bubble_outline,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'ChatApp',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 24),
-            child: CircleAvatar(
-              backgroundImage: AssetImage('assets/images/user.png'),
-              radius: 20,
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: IconButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ContactScreen()),
+                );
+              },
+              icon: const Icon(Icons.group_add, color: Colors.white),
+              tooltip: 'Create Group',
             ),
           ),
-          IconButton(
-            onPressed: signOut,
-            icon: const Icon(Icons.logout, color: Colors.white),
+          Container(
+            margin: const EdgeInsets.only(right: 8),
+            padding: const EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: CircleAvatar(
+              backgroundImage: const AssetImage('assets/images/user.png'),
+              radius: 18,
+              backgroundColor: Colors.transparent,
+            ),
+          ),
+          Container(
+            margin: const EdgeInsets.only(right: 16),
+            decoration: BoxDecoration(
+              color: Colors.red.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: IconButton(
+              onPressed: signOut,
+              icon: const Icon(Icons.logout, color: Colors.redAccent),
+              tooltip: 'Sign Out',
+            ),
           ),
         ],
       ),
       body: FloatingSearchBar(
-        hint: 'Search users...',
+        hint: 'Search users and groups...',
+        hintStyle: const TextStyle(color: Colors.grey),
+        queryStyle: const TextStyle(color: Colors.white),
+        backgroundColor: const Color(0xFF1A1A1A),
+        backdropColor: Colors.black.withOpacity(0.5),
         scrollPadding: const EdgeInsets.only(top: 16, bottom: 80),
-        transitionDuration: const Duration(milliseconds: 800),
+        transitionDuration: const Duration(milliseconds: 600),
         transitionCurve: Curves.easeInOut,
         physics: const BouncingScrollPhysics(),
         axisAlignment: isPortrait ? 0.0 : -1.0,
@@ -232,19 +304,28 @@ class _HomePageState extends State<HomePage> {
         actions: [
           FloatingSearchBarAction(
             showIfOpened: false,
-            child: CircularButton(
-              icon: const Icon(Icons.search),
-              onPressed: () {},
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.search, color: Colors.white, size: 20),
             ),
           ),
           FloatingSearchBarAction.searchToClear(showIfClosed: false),
         ],
         builder: (context, transition) {
           return ClipRRect(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(16),
             child: Material(
-              color: Colors.white,
-              elevation: 4.0,
+              color: const Color(0xFF1A1A1A),
+              elevation: 8.0,
+              shadowColor: Colors.black.withOpacity(0.3),
               child: Builder(
                 builder: (context) {
                   if (filteredUsers.isEmpty && selectedTerm.isEmpty) {
@@ -256,7 +337,10 @@ class _HomePageState extends State<HomePage> {
                         'Start typing to search users...',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall,
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 14,
+                        ),
                       ),
                     );
                   }
@@ -270,7 +354,10 @@ class _HomePageState extends State<HomePage> {
                         'No users found for "$selectedTerm"',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall,
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 14,
+                        ),
                       ),
                     );
                   }
@@ -283,47 +370,83 @@ class _HomePageState extends State<HomePage> {
                             height: 72,
                             width: double.infinity,
                             alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              border: Border(
+                                bottom: BorderSide(
+                                  color: Colors.grey.withOpacity(0.1),
+                                  width: 0.5,
+                                ),
+                              ),
+                            ),
                             child: ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: Colors.grey[300],
-                                child: ClipOval(
-                                  child: user['profilePic'] != null
-                                      ? CachedNetworkImage(
-                                          imageUrl: user['profilePic'],
-                                          fit: BoxFit.cover,
-                                          width: 40,
-                                          height: 40,
-                                          placeholder: (context, url) =>
-                                              const CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                              ),
-                                          errorWidget: (context, url, error) =>
-                                              const Icon(
-                                                Icons.person,
-                                                size: 20,
-                                              ),
-                                        )
-                                      : Image.asset(
-                                          'assets/images/user.png',
-                                          width: 40,
-                                          height: 40,
-                                        ),
+                              leading: Container(
+                                padding: const EdgeInsets.all(2),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: const LinearGradient(
+                                    colors: [
+                                      Color(0xFF667EEA),
+                                      Color(0xFF764BA2),
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                ),
+                                child: CircleAvatar(
+                                  backgroundColor: const Color(0xFF1A1A1A),
+                                  radius: 18,
+                                  child: ClipOval(
+                                    child: user['profilePic'] != null
+                                        ? CachedNetworkImage(
+                                            imageUrl: user['profilePic'],
+                                            fit: BoxFit.cover,
+                                            width: 32,
+                                            height: 32,
+                                            placeholder: (context, url) =>
+                                                const CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  color: Colors.white,
+                                                ),
+                                            errorWidget:
+                                                (context, url, error) =>
+                                                    const Icon(
+                                                      Icons.person,
+                                                      size: 16,
+                                                      color: Colors.white,
+                                                    ),
+                                          )
+                                        : Image.asset(
+                                            'assets/images/user.png',
+                                            width: 32,
+                                            height: 32,
+                                          ),
+                                  ),
                                 ),
                               ),
                               title: Text(
                                 user['username'] ??
                                     user['email']?.split('@').first ??
                                     'User',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
-                              subtitle: Text(user['email'] ?? ''),
+                              subtitle: Text(
+                                user['email'] ?? '',
+                                style: TextStyle(
+                                  color: Colors.grey.shade400,
+                                  fontSize: 12,
+                                ),
+                              ),
                               onTap: () {
                                 // Start chat with this user
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (context) => ChatPage(
-                                      receiverUserEmail: user['email'] ?? '',
+                                    builder: (context) => ChatPageChatView(
                                       receiverUserId: user['id'],
+                                      receiverUserEmail: user['email'] ?? '',
                                     ),
                                   ),
                                 );
@@ -381,7 +504,10 @@ class _HomePageState extends State<HomePage> {
                           }
 
                           if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                            return const Text("No statuses from your chats");
+                            return const Text(
+                              "No statuses from your chats",
+                              style: TextStyle(color: Colors.grey),
+                            );
                           }
 
                           final stories = snapshot.data!;
@@ -479,6 +605,7 @@ class _HomePageState extends State<HomePage> {
                                         style: const TextStyle(
                                           fontSize: 12,
                                           color: Colors.white,
+                                          fontWeight: FontWeight.w500,
                                         ),
                                       ),
                                     ],
@@ -500,12 +627,23 @@ class _HomePageState extends State<HomePage> {
               child: Padding(
                 padding: const EdgeInsets.only(top: 30),
                 child: Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.only(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF1A1A1A), Color(0xFF2A2A2A)],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
+                    borderRadius: const BorderRadius.only(
                       topLeft: Radius.circular(40),
                       topRight: Radius.circular(40),
                     ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.3),
+                        blurRadius: 20,
+                        offset: const Offset(0, -5),
+                      ),
+                    ],
                   ),
                   child: _buildChatList(),
                 ),
@@ -526,7 +664,29 @@ class _HomePageState extends State<HomePage> {
           // show the real error so you can debug (index/auth/permission errors)
           final err = snapshot.error.toString();
           debugPrint('Firestore chat_rooms error: $err');
-          return Center(child: Text('Error loading chats:\n$err'));
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error, color: Colors.red, size: 48),
+                const SizedBox(height: 16),
+                Text(
+                  'Error loading chats:\n$err',
+                  style: const TextStyle(color: Colors.white),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                ElevatedButton(
+                  onPressed: () => setState(() {}),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF667EEA),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          );
         }
 
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -534,7 +694,12 @@ class _HomePageState extends State<HomePage> {
         }
 
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(child: Text('No chats yet'));
+          return const Center(
+            child: Text(
+              'No chats yet',
+              style: TextStyle(color: Colors.grey, fontSize: 16),
+            ),
+          );
         }
 
         final docs = snapshot.data!.docs;
@@ -555,14 +720,16 @@ class _HomePageState extends State<HomePage> {
                   .toList();
             }
 
-            // find other user id (fallback: first member)
+            // Check if this is a group chat
+            final chatType = raw['chatType'] as String? ?? 'direct';
+            final isGroupChat = chatType == 'group';
+            final groupName = raw['groupName'] as String?;
+            final groupAvatar = raw['groupAvatar'] as String?;
+
+            // find other user id (for direct chats only)
             final currentUid = _auth.currentUser?.uid ?? '';
-            String otherUserId;
-            if (members.isEmpty) {
-              otherUserId = ''; // no members, fallback to empty
-            } else if (members.length == 1) {
-              otherUserId = members.first;
-            } else {
+            String otherUserId = '';
+            if (!isGroupChat && members.length >= 2) {
               otherUserId = members.firstWhere(
                 (id) => id != currentUid,
                 orElse: () => members.first,
@@ -574,168 +741,281 @@ class _HomePageState extends State<HomePage> {
               raw['lastMessage'],
             );
 
-            // get profile and username of other user using FutureBuilder
-            if (otherUserId.isEmpty) {
-              // If otherUserId cannot be determined, just render a fallback tile
-              return ListTile(
-                leading: const CircleAvatar(child: Icon(Icons.person)),
-                title: const Text('Unknown'),
-                subtitle: Text(lastMessageText),
-              );
-            }
-
             // Get unread count from chat room document
             final unreadCountMap =
                 raw['unreadCount'] as Map<String, dynamic>? ?? {};
             final currentUserId = _auth.currentUser?.uid ?? '';
             final unreadCount = (unreadCountMap[currentUserId] as int?) ?? 0;
 
-            return FutureBuilder<Map<String, dynamic>>(
-              future: _getUserData(otherUserId),
-              builder: (context, userSnapshot) {
-                if (userSnapshot.hasError) {
-                  debugPrint(
-                    'Error fetching data for $otherUserId: ${userSnapshot.error}',
-                  );
-                  return ListTile(
-                    leading: const CircleAvatar(child: Icon(Icons.person)),
-                    title: Text('Error loading'),
-                    subtitle: Text(lastMessageText),
-                  );
-                }
+            // Handle group chats vs direct chats
+            if (isGroupChat) {
+              // Group chat display
+              final displayName = groupName ?? 'Group Chat';
+              final displayAvatar = groupAvatar ?? '';
+              final memberCount = members.length;
 
-                if (userSnapshot.connectionState == ConnectionState.waiting) {
-                  return ListTile(
-                    leading: const CircleAvatar(child: Icon(Icons.person)),
-                    title: const Text('Loading...'),
-                    subtitle: Text(lastMessageText),
-                  );
-                }
-
-                if (!userSnapshot.hasData) {
-                  return ListTile(
-                    leading: const CircleAvatar(child: Icon(Icons.person)),
-                    title: Text(otherUserId),
-                    subtitle: Text(lastMessageText),
-                  );
-                }
-
-                final userData = userSnapshot.data!;
-                final username =
-                    (userData['username'] ??
-                            userData['email']?.split('@')?.first ??
-                            'User')
-                        .toString();
-                final email = (userData['email'] ?? '').toString();
-                final profilePic = (userData['profilePic'] ?? '').toString();
-
-                return Padding(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 10.0,
-                    horizontal: 16,
-                  ),
-                  child: ListTile(
-                    leading: badges.Badge(
-                      showBadge: unreadCount > 0,
-                      badgeContent: Text(
-                        unreadCount > 99 ? '99+' : unreadCount.toString(),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
+              return Padding(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 10.0,
+                  horizontal: 16,
+                ),
+                child: ListTile(
+                  leading: badges.Badge(
+                    showBadge: unreadCount > 0,
+                    badgeContent: Text(
+                      unreadCount > 99 ? '99+' : unreadCount.toString(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
                       ),
-                      badgeStyle: const badges.BadgeStyle(
-                        badgeColor: Colors.red,
-                        padding: EdgeInsets.all(6),
-                      ),
-                      position: badges.BadgePosition.topEnd(top: -8, end: -8),
-                      child: CircleAvatar(
-                        backgroundColor: Colors.grey[300],
-                        radius: 24,
-                        child: Stack(
-                          children: [
-                            ClipOval(
-                              child: profilePic.isNotEmpty
-                                  ? CachedNetworkImage(
-                                      imageUrl: profilePic,
-                                      fit: BoxFit.cover,
-                                      width: 48,
-                                      height: 48,
-                                      placeholder: (context, url) =>
-                                          const CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                          ),
-                                      errorWidget: (context, url, error) =>
-                                          Image.asset(
-                                            'assets/images/user.png',
-                                            width: 48,
-                                            height: 48,
-                                          ),
-                                    )
-                                  : Image.asset(
-                                      'assets/images/user.png',
-                                      width: 48,
-                                      height: 48,
+                    ),
+                    badgeStyle: const badges.BadgeStyle(
+                      badgeColor: Colors.red,
+                      padding: EdgeInsets.all(6),
+                    ),
+                    position: badges.BadgePosition.topEnd(top: -8, end: -8),
+                    child: CircleAvatar(
+                      backgroundColor: Colors.grey[300],
+                      radius: 24,
+                      child: displayAvatar.isNotEmpty
+                          ? ClipOval(
+                              child: CachedNetworkImage(
+                                imageUrl: displayAvatar,
+                                fit: BoxFit.cover,
+                                width: 48,
+                                height: 48,
+                                placeholder: (context, url) =>
+                                    const CircularProgressIndicator(
+                                      strokeWidth: 2,
                                     ),
-                            ),
-                            Align(
-                              alignment: Alignment.bottomRight,
-                              child: UserStatusIndicator(
-                                userId: otherUserId,
-                                showText: false,
-                                size: 12,
+                                errorWidget: (context, url, error) =>
+                                    const Icon(Icons.group, size: 24),
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
+                            )
+                          : const Icon(Icons.group, size: 24),
                     ),
-                    title: Text(
-                      username,
-                      style: TextStyle(
-                        fontWeight: unreadCount > 0
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                        fontSize: 16,
-                      ),
+                  ),
+                  title: Text(
+                    displayName,
+                    style: TextStyle(
+                      fontWeight: unreadCount > 0
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                      fontSize: 16,
+                      color: Colors.white,
                     ),
-                    subtitle: Text(
-                      lastMessageText,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontWeight: unreadCount > 0
-                            ? FontWeight.w500
-                            : FontWeight.normal,
-                        color: unreadCount > 0
-                            ? Colors.black87
-                            : Colors.grey[600],
-                      ),
+                  ),
+                  subtitle: Text(
+                    '$memberCount members • $lastMessageText',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: unreadCount > 0
+                          ? FontWeight.w500
+                          : FontWeight.normal,
+                      color: unreadCount > 0 ? Colors.white : Colors.grey[400],
                     ),
-                    onTap: () async {
-                      // Mark messages as read when opening chat
-                      if (unreadCount > 0) {
-                        await ChatService().markMessagesAsRead(
-                          chatRoom.id,
-                          _auth.currentUser!.uid,
-                        );
-                      }
-
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => ChatPage(
-                            receiverUserEmail: email,
-                            receiverUserId: otherUserId,
-                          ),
-                        ),
+                  ),
+                  onTap: () async {
+                    // Mark messages as read when opening chat
+                    if (unreadCount > 0) {
+                      await ChatService().markMessagesAsRead(
+                        chatRoom.id,
+                        _auth.currentUser!.uid,
                       );
-                    },
+                    }
+
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => GroupChatPage(
+                          groupId: chatRoom.id,
+                          groupName: displayName,
+                          memberIds: members,
+                          groupImage: displayAvatar,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              );
+            } else {
+              // Direct chat display (existing logic)
+              if (otherUserId.isEmpty) {
+                return ListTile(
+                  leading: const CircleAvatar(child: Icon(Icons.person)),
+                  title: const Text(
+                    'Unknown',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  subtitle: Text(
+                    lastMessageText,
+                    style: const TextStyle(color: Colors.grey),
                   ),
                 );
-              },
-            );
+              }
+
+              return FutureBuilder<Map<String, dynamic>>(
+                future: _getUserData(otherUserId),
+                builder: (context, userSnapshot) {
+                  if (userSnapshot.hasError) {
+                    debugPrint(
+                      'Error fetching data for $otherUserId: ${userSnapshot.error}',
+                    );
+                    return ListTile(
+                      leading: const CircleAvatar(child: Icon(Icons.person)),
+                      title: const Text(
+                        'Error loading',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                      subtitle: Text(
+                        lastMessageText,
+                        style: const TextStyle(color: Colors.grey),
+                      ),
+                    );
+                  }
+
+                  if (userSnapshot.connectionState == ConnectionState.waiting) {
+                    return ListTile(
+                      leading: const CircleAvatar(child: Icon(Icons.person)),
+                      title: const Text('Loading...'),
+                      subtitle: Text(lastMessageText),
+                    );
+                  }
+
+                  if (!userSnapshot.hasData) {
+                    return ListTile(
+                      leading: const CircleAvatar(child: Icon(Icons.person)),
+                      title: Text(
+                        otherUserId,
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                      subtitle: Text(
+                        lastMessageText,
+                        style: const TextStyle(color: Colors.grey),
+                      ),
+                    );
+                  }
+
+                  final userData = userSnapshot.data!;
+                  final username =
+                      (userData['username'] ??
+                              userData['email']?.split('@')?.first ??
+                              'User')
+                          .toString();
+                  final email = (userData['email'] ?? '').toString();
+                  final profilePic = (userData['profilePic'] ?? '').toString();
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 10.0,
+                      horizontal: 16,
+                    ),
+                    child: ListTile(
+                      leading: badges.Badge(
+                        showBadge: unreadCount > 0,
+                        badgeContent: Text(
+                          unreadCount > 99 ? '99+' : unreadCount.toString(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        badgeStyle: const badges.BadgeStyle(
+                          badgeColor: Colors.red,
+                          padding: EdgeInsets.all(6),
+                        ),
+                        position: badges.BadgePosition.topEnd(top: -8, end: -8),
+                        child: CircleAvatar(
+                          backgroundColor: Colors.grey[300],
+                          radius: 24,
+                          child: Stack(
+                            children: [
+                              ClipOval(
+                                child: profilePic.isNotEmpty
+                                    ? CachedNetworkImage(
+                                        imageUrl: profilePic,
+                                        fit: BoxFit.cover,
+                                        width: 48,
+                                        height: 48,
+                                        placeholder: (context, url) =>
+                                            const CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                        errorWidget: (context, url, error) =>
+                                            Image.asset(
+                                              'assets/images/user.png',
+                                              width: 48,
+                                              height: 48,
+                                            ),
+                                      )
+                                    : Image.asset(
+                                        'assets/images/user.png',
+                                        width: 48,
+                                        height: 48,
+                                      ),
+                              ),
+                              Align(
+                                alignment: Alignment.bottomRight,
+                                child: UserStatusIndicator(
+                                  userId: otherUserId,
+                                  showText: false,
+                                  size: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      title: Text(
+                        username,
+                        style: TextStyle(
+                          fontWeight: unreadCount > 0
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                          fontSize: 16,
+                          color: Colors.white,
+                        ),
+                      ),
+                      subtitle: Text(
+                        lastMessageText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontWeight: unreadCount > 0
+                              ? FontWeight.w500
+                              : FontWeight.normal,
+                          color: unreadCount > 0
+                              ? Colors.white
+                              : Colors.grey[400],
+                        ),
+                      ),
+                      onTap: () async {
+                        // Mark messages as read when opening chat
+                        if (unreadCount > 0) {
+                          await ChatService().markMessagesAsRead(
+                            chatRoom.id,
+                            _auth.currentUser!.uid,
+                          );
+                        }
+
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ChatPageChatView(
+                              receiverUserId: otherUserId,
+                              receiverUserEmail: email,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  );
+                },
+              );
+            }
           },
         );
       },

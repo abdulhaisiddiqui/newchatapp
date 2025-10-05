@@ -1,5 +1,6 @@
-import 'package:chatapp/pages/chat_page.dart';
+import 'package:chatapp/pages/chat_page_chatview.dart';
 import 'package:chatapp/pages/profile_screen.dart';
+import 'package:chatapp/services/chat/chat_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -15,6 +16,85 @@ class ContactScreen extends StatefulWidget {
 
 class _ContactScreenState extends State<ContactScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final Set<String> _selectedUsers = {};
+
+  void _createGroupChat() async {
+    if (_selectedUsers.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Select at least 2 users for a group chat'),
+        ),
+      );
+      return;
+    }
+
+    // Show dialog to enter group name
+    final groupNameController = TextEditingController();
+    final groupName = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Create Group Chat'),
+        content: TextField(
+          controller: groupNameController,
+          decoration: const InputDecoration(
+            hintText: 'Enter group name',
+            border: OutlineInputBorder(),
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              final name = groupNameController.text.trim();
+              if (name.isNotEmpty) {
+                Navigator.pop(context, name);
+              }
+            },
+            child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
+
+    if (groupName != null && groupName.isNotEmpty) {
+      try {
+        final chatService = ChatService();
+        final chatRoomId = await chatService.createGroupChat(
+          memberIds: _selectedUsers.toList(),
+          groupName: groupName,
+        );
+
+        if (chatRoomId != null) {
+          setState(() {
+            _selectedUsers.clear();
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Group "$groupName" created successfully!')),
+          );
+
+          // Navigate to the group chat
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ChatPageChatView(
+                receiverUserId: '', // Not used for groups yet
+                receiverUserEmail: groupName,
+              ),
+            ),
+          );
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to create group: $e')));
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,9 +129,43 @@ class _ContactScreenState extends State<ContactScreen> {
                 ),
                 Positioned(
                   right: 10,
-                  child: IconButton(
-                    onPressed: () {},
-                    icon: Icon(Icons.person, color: Colors.white),
+                  child: Row(
+                    children: [
+                      if (_selectedUsers.isNotEmpty)
+                        IconButton(
+                          onPressed: _createGroupChat,
+                          icon: Icon(Icons.group_add, color: Colors.white),
+                          tooltip: 'Create Group',
+                        ),
+                      IconButton(
+                        onPressed: () {
+                          setState(() {
+                            if (_selectedUsers.isNotEmpty) {
+                              _selectedUsers.clear();
+                            } else {
+                              // Enter selection mode - maybe show a hint
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Tap contacts to select for group chat',
+                                  ),
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            }
+                          });
+                        },
+                        icon: Icon(
+                          _selectedUsers.isNotEmpty
+                              ? Icons.close
+                              : Icons.checklist,
+                          color: Colors.white,
+                        ),
+                        tooltip: _selectedUsers.isNotEmpty
+                            ? 'Cancel Selection'
+                            : 'Select Contacts',
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -113,22 +227,34 @@ class _ContactScreenState extends State<ContactScreen> {
       return const SizedBox.shrink();
     }
 
+    final isSelected = _selectedUsers.contains(userUid);
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
       child: Slidable(
         key: ValueKey(userUid),
         child: ListTile(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ChatPage(
-                  receiverUserEmail: userEmail,
-                  receiverUserId: userUid,
-                ),
-              ),
-            );
-          },
+          onTap: _selectedUsers.isNotEmpty
+              ? () {
+                  setState(() {
+                    if (isSelected) {
+                      _selectedUsers.remove(userUid);
+                    } else {
+                      _selectedUsers.add(userUid);
+                    }
+                  });
+                }
+              : () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ChatPageChatView(
+                        receiverUserEmail: userEmail,
+                        receiverUserId: userUid,
+                      ),
+                    ),
+                  );
+                },
           title: Text(
             data['username'] as String? ?? userEmail.split('@').first,
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
@@ -165,6 +291,20 @@ class _ContactScreenState extends State<ContactScreen> {
               ),
             ],
           ),
+          trailing: _selectedUsers.isNotEmpty
+              ? Checkbox(
+                  value: isSelected,
+                  onChanged: (bool? value) {
+                    setState(() {
+                      if (value == true) {
+                        _selectedUsers.add(userUid);
+                      } else {
+                        _selectedUsers.remove(userUid);
+                      }
+                    });
+                  },
+                )
+              : null,
         ),
       ),
     );

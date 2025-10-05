@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:chatapp/services/story/story_service.dart';
 
 class StoryUploadPage extends StatefulWidget {
@@ -31,7 +32,17 @@ class _StoryUploadPageState extends State<StoryUploadPage> {
     if (_selectedFile == null) return;
 
     try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Please log in to upload stories")),
+        );
+        return;
+      }
+
       await _storyService.uploadStory(
+        userId: currentUser.uid,
+        username: currentUser.email ?? 'Unknown User',
         file: _selectedFile!,
         type: "image",
       );
@@ -42,9 +53,9 @@ class _StoryUploadPageState extends State<StoryUploadPage> {
 
       Navigator.pop(context); // back to Home
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed to upload: $e")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Failed to upload: $e")));
     }
   }
 
@@ -60,17 +71,17 @@ class _StoryUploadPageState extends State<StoryUploadPage> {
             // 🖼️ Preview selected image
             _selectedFile != null
                 ? ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Image.file(
-                _selectedFile!,
-                height: 250,
-                fit: BoxFit.cover,
-              ),
-            )
+                    borderRadius: BorderRadius.circular(16),
+                    child: Image.file(
+                      _selectedFile!,
+                      height: 250,
+                      fit: BoxFit.cover,
+                    ),
+                  )
                 : const Text(
-              "No image selected",
-              style: TextStyle(fontSize: 16),
-            ),
+                    "No image selected",
+                    style: TextStyle(fontSize: 16),
+                  ),
             const SizedBox(height: 20),
 
             // 📸 Pick buttons
@@ -106,7 +117,19 @@ class _StoryUploadPageState extends State<StoryUploadPage> {
               icon: const Icon(Icons.text_fields),
               label: const Text("Post Text Status"),
               onPressed: () async {
+                final currentUser = FirebaseAuth.instance.currentUser;
+                if (currentUser == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Please log in to post status"),
+                    ),
+                  );
+                  return;
+                }
+
                 await _storyService.uploadStory(
+                  userId: currentUser.uid,
+                  username: currentUser.email ?? 'Unknown User',
                   text: "Hello from my status!",
                   type: "text",
                 );

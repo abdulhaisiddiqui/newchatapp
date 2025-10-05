@@ -1,6 +1,7 @@
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:chatapp/components/chat_bubble.dart';
 import 'package:chatapp/components/call/call_screen_widget.dart';
+import 'package:chatapp/components/voice_recorder.dart';
 import 'package:chatapp/pages/location_share_page.dart';
 import 'package:chatapp/pages/contact_share_page.dart';
 import 'package:chatapp/pages/image_viewer_page.dart';
@@ -46,6 +47,7 @@ class _ChatPageState extends State<ChatPage> {
 
   bool _isUploading = false;
   double _uploadProgress = 0.0;
+  String? _statusMessage;
   bool _isTyping = false;
   Timer? _typingTimer;
   Message? _replyToMessage;
@@ -132,6 +134,64 @@ class _ChatPageState extends State<ChatPage> {
       setState(() {
         _isUploading = false;
         _uploadProgress = 0.0;
+      });
+    }
+  }
+
+  void _handleVoiceRecording(String audioPath) {
+    _onVoiceRecordingComplete(audioPath);
+  }
+
+  void _onVoiceRecordingComplete(String audioPath) async {
+    // Upload the recorded audio file and send as voice message
+    setState(() {
+      _isUploading = true;
+      _uploadProgress = 0.0;
+      _statusMessage = 'Uploading voice message...';
+    });
+
+    try {
+      final audioFile = File(audioPath);
+
+      // Upload voice file
+      final result = await _fileService.uploadFile(
+        file: audioFile,
+        chatRoomId: _getChatRoomId(),
+        messageId: DateTime.now().millisecondsSinceEpoch.toString(),
+        onProgress: (progress) {
+          setState(() => _uploadProgress = progress);
+        },
+        onStatusUpdate: (status) {
+          setState(() => _statusMessage = status);
+        },
+      );
+
+      if (result.isSuccess && result.fileId != null) {
+        // Get the file attachment from Firestore
+        final fileAttachment = await _fileService.getFileMetadata(
+          result.fileId!,
+        );
+
+        if (fileAttachment != null) {
+          // Send voice message
+          await _chatService.sendFileMessage(
+            receiverId: widget.receiverUserId,
+            fileAttachment: fileAttachment,
+            textMessage: '', // No text for voice messages
+          );
+        } else {
+          _showErrorSnackBar('Failed to get voice message metadata');
+        }
+      } else {
+        _showErrorSnackBar('Failed to upload voice message: ${result.error}');
+      }
+    } catch (e) {
+      _showErrorSnackBar('Error sending voice message: $e');
+    } finally {
+      setState(() {
+        _isUploading = false;
+        _uploadProgress = 0.0;
+        _statusMessage = null;
       });
     }
   }
@@ -638,13 +698,18 @@ class _ChatPageState extends State<ChatPage> {
               try {
                 // Check gallery permission
                 List<Permission> permissionsToCheck = [Permission.photos];
-                if (Platform.isAndroid) {
-                  // For older Android versions, photos permission might not be available
-                  try {
-                    await Permission.photos.status;
-                  } catch (e) {
-                    permissionsToCheck = [Permission.storage];
+                try {
+                  if (Platform.isAndroid) {
+                    // For older Android versions, photos permission might not be available
+                    try {
+                      await Permission.photos.status;
+                    } catch (e) {
+                      permissionsToCheck = [Permission.storage];
+                    }
                   }
+                } catch (e) {
+                  // Platform not available, use storage as fallback
+                  permissionsToCheck = [Permission.storage];
                 }
 
                 bool hasPermission = true;
@@ -680,17 +745,21 @@ class _ChatPageState extends State<ChatPage> {
             onDocumentPressed: () async {
               try {
                 // Check storage permission for documents
-                if (Platform.isAndroid) {
-                  PermissionStatus status = await Permission.storage.status;
-                  if (status.isDenied || status.isLimited) {
-                    status = await Permission.storage.request();
+                try {
+                  if (Platform.isAndroid) {
+                    PermissionStatus status = await Permission.storage.status;
+                    if (status.isDenied || status.isLimited) {
+                      status = await Permission.storage.request();
+                    }
+                    if (!status.isGranted) {
+                      _showPermissionDeniedDialog(
+                        'Storage permission is required to select documents',
+                      );
+                      return;
+                    }
                   }
-                  if (!status.isGranted) {
-                    _showPermissionDeniedDialog(
-                      'Storage permission is required to select documents',
-                    );
-                    return;
-                  }
+                } catch (e) {
+                  // Platform not available, skip permission check
                 }
 
                 FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -711,10 +780,11 @@ class _ChatPageState extends State<ChatPage> {
             onContactPressed: _pickAndShareContact,
             onLocationPressed: _shareLocation,
             onVoiceRecordStart: () {
-              // Voice recording is handled by the VoiceRecorder widget separately
+              // Voice recording will be handled by the VoiceRecorder widget
             },
-            onVoiceRecordStop: () {
-              // Voice recording is handled by the VoiceRecorder widget separately
+            onVoiceRecordStop: (audioPath) {
+              // Handle completed voice recording
+              _handleVoiceRecording(audioPath);
             },
             isUploading: _isUploading,
             uploadProgress: _uploadProgress,
@@ -936,7 +1006,7 @@ class ChatInputBar extends StatefulWidget {
   final VoidCallback onContactPressed;
   final VoidCallback onLocationPressed;
   final VoidCallback? onVoiceRecordStart;
-  final VoidCallback? onVoiceRecordStop;
+  final Function(String)? onVoiceRecordStop;
   final bool isUploading;
   final double uploadProgress;
   final bool isWeb;
@@ -1023,11 +1093,32 @@ class _ChatInputBarState extends State<ChatInputBar>
     );
   }
 
-  void _handleMicPress() {
-    if (!widget.isWeb && widget.onVoiceRecordStart != null) {
-      setState(() => _isRecording = true);
-      _micController.forward();
-      widget.onVoiceRecordStart!();
+  void _handleMicPress() async {
+    if (!widget.isWeb && widget.onVoiceRecordStop != null) {
+      // Check microphone permission before starting recording
+      PermissionStatus micStatus = await Permission.microphone.status;
+      if (micStatus.isDenied) {
+        micStatus = await Permission.microphone.request();
+      }
+
+      if (micStatus.isGranted) {
+        setState(() => _isRecording = true);
+        _micController.forward();
+        // Start voice recording - the actual recording will be handled by VoiceRecorder widget
+      } else {
+        // Show permission denied message
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Microphone permission is required for voice messages',
+            ),
+            action: SnackBarAction(
+              label: 'Settings',
+              onPressed: openAppSettings,
+            ),
+          ),
+        );
+      }
     }
   }
 
@@ -1035,7 +1126,8 @@ class _ChatInputBarState extends State<ChatInputBar>
     if (_isRecording && widget.onVoiceRecordStop != null) {
       setState(() => _isRecording = false);
       _micController.reverse();
-      widget.onVoiceRecordStop!();
+      // Note: The actual voice recording completion is handled by the VoiceRecorder widget
+      // This callback is just for UI state management
     }
   }
 
@@ -1054,7 +1146,7 @@ class _ChatInputBarState extends State<ChatInputBar>
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, -2),
           ),
@@ -1202,27 +1294,44 @@ class _ChatInputBarState extends State<ChatInputBar>
       );
     }
 
-    return ScaleTransition(
-      key: const ValueKey('mic'),
-      scale: _micScaleAnimation,
-      child: Material(
-        color: _isRecording ? Colors.red : const Color(0xFF128C7E),
-        shape: const CircleBorder(),
-        child: InkWell(
-          onTapDown: (_) => _handleMicPress(),
-          onTapUp: (_) => _handleMicRelease(),
-          onTapCancel: _handleMicRelease,
-          customBorder: const CircleBorder(),
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            child: Icon(
-              _isRecording ? Icons.stop : Icons.mic,
-              color: Colors.white,
-              size: 22,
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        ScaleTransition(
+          key: const ValueKey('mic'),
+          scale: _micScaleAnimation,
+          child: Material(
+            color: _isRecording ? Colors.red : const Color(0xFF128C7E),
+            shape: const CircleBorder(),
+            child: InkWell(
+              onTapDown: (_) => _handleMicPress(),
+              onTapUp: (_) => _handleMicRelease(),
+              onTapCancel: _handleMicRelease,
+              customBorder: const CircleBorder(),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                child: Icon(
+                  _isRecording ? Icons.stop : Icons.mic,
+                  color: Colors.white,
+                  size: 22,
+                ),
+              ),
             ),
           ),
         ),
-      ),
+        if (_isRecording)
+          Positioned.fill(
+            child: VoiceRecorder(
+              onStop: (audioPath) {
+                setState(() => _isRecording = false);
+                _micController.reverse();
+                if (widget.onVoiceRecordStop != null) {
+                  widget.onVoiceRecordStop!(audioPath);
+                }
+              },
+            ),
+          ),
+      ],
     );
   }
 }

@@ -3,11 +3,13 @@ import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:chatapp/firebase_options.dart';
 import 'package:chatapp/pages/bottomNav_screen.dart';
 import 'package:chatapp/pages/chat_page.dart';
+import 'package:chatapp/pages/chat_page_chatview.dart';
 import 'package:chatapp/pages/splash_screen.dart';
 import 'package:chatapp/services/auth/auth_gate.dart';
 import 'package:chatapp/services/auth/auth_service.dart';
 import 'package:chatapp/services/call/call_manager.dart';
 import 'package:chatapp/services/secure_storage_service.dart';
+import 'package:chatapp/services/user/user_status_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -201,7 +203,7 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   String? _token;
@@ -209,7 +211,34 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initNotificationsAndPermissions();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    // Set user offline when app is disposed
+    UserStatusService().setUserOffline();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    switch (state) {
+      case AppLifecycleState.resumed:
+        // App is visible and responding to user input
+        UserStatusService().setUserOnline();
+        break;
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+      case AppLifecycleState.hidden:
+        // App is not visible or not responding
+        UserStatusService().setUserOffline();
+        break;
+    }
   }
 
   Future<void> _initNotificationsAndPermissions() async {
@@ -223,9 +252,10 @@ class _MyAppState extends State<MyApp> {
         print('Web notification permission: ${settings.authorizationStatus}');
 
         // Get a token for web (supply your VAPID key)
-        // Replace 'YOUR_WEB_VAPID_KEY_HERE' with your web VAPID key (Cloud Messaging -> Web configuration).
+        // TODO: Replace with your actual VAPID key from Firebase Console → Project Settings → Cloud Messaging → Web Push certificates
         final token = await FirebaseMessaging.instance.getToken(
-          vapidKey: 'YOUR_WEB_VAPID_KEY_HERE',
+          vapidKey:
+              null, // Set to null to avoid the error until you add your VAPID key
         );
         print('FCM web token: $token');
         _token = token;
@@ -269,9 +299,15 @@ class _MyAppState extends State<MyApp> {
           badge: true,
           sound: true,
         );
-      } else if (Platform.isAndroid) {
-        // For Android 13+, you may need POST_NOTIFICATIONS permission; handle with permission_handler if needed.
-        // Many Android devices don't require explicit runtime permission pre Android 13.
+      } else {
+        try {
+          if (Platform.isAndroid) {
+            // For Android 13+, you may need POST_NOTIFICATIONS permission; handle with permission_handler if needed.
+            // Many Android devices don't require explicit runtime permission pre Android 13.
+          }
+        } catch (e) {
+          // Platform not available
+        }
       }
     } catch (e) {
       print('Mobile permission error: $e');
@@ -367,7 +403,7 @@ class _MyAppState extends State<MyApp> {
             final userEmail =
                 args['receiverUserEmail'] ?? args['username'] ?? '';
             return MaterialPageRoute(
-              builder: (context) => ChatPage(
+              builder: (context) => ChatPageChatView(
                 receiverUserId: userId,
                 receiverUserEmail: userEmail,
               ),

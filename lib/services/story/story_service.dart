@@ -76,6 +76,25 @@ class StoryService with ErrorHandler {
     }
   }
 
+  // Mark a story as viewed by the current user
+  Future<void> markStoryAsViewed(String userId, String storyId) async {
+    try {
+      final currentUser = _auth.currentUser;
+      if (currentUser == null) return;
+
+      await _firestore
+          .collection("stories")
+          .doc(userId)
+          .collection("userStories")
+          .doc(storyId)
+          .update({
+            "viewedBy": FieldValue.arrayUnion([currentUser.uid]),
+          });
+    } catch (e) {
+      debugPrint('Error marking story as viewed: $e');
+    }
+  }
+
   Stream<List<Map<String, dynamic>>> getVisibleStories(
     String currentUserId,
   ) async* {

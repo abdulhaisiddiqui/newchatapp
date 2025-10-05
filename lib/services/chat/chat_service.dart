@@ -21,6 +21,52 @@ class ChatService extends ChangeNotifier {
     await sendTextMessage(receiverId, message);
   }
 
+  //CREATE GROUP CHAT
+  Future<String?> createGroupChat({
+    required List<String> memberIds,
+    required String groupName,
+    String? groupDescription,
+    String? groupAvatar,
+  }) async {
+    final currentUser = _firebaseAuth.currentUser;
+    if (currentUser == null) {
+      throw Exception('User not authenticated');
+    }
+
+    if (memberIds.length < 2) {
+      throw Exception('Group chat must have at least 2 members');
+    }
+
+    // Add current user to members if not already included
+    final allMembers = List<String>.from(memberIds);
+    if (!allMembers.contains(currentUser.uid)) {
+      allMembers.add(currentUser.uid);
+    }
+
+    // Sort member IDs to create consistent chat room ID
+    allMembers.sort();
+    final chatRoomId = allMembers.join("_");
+
+    try {
+      // Create group chat room
+      await _firestore.collection('chat_rooms').doc(chatRoomId).set({
+        'members': allMembers,
+        'chatType': 'group',
+        'groupName': groupName,
+        'groupDescription': groupDescription,
+        'groupAvatar': groupAvatar,
+        'createdBy': currentUser.uid,
+        'createdAt': FieldValue.serverTimestamp(),
+        'lastActivity': FieldValue.serverTimestamp(),
+        'memberCount': allMembers.length,
+      }, SetOptions(merge: true));
+
+      return chatRoomId;
+    } catch (e) {
+      throw Exception('Failed to create group chat: ${e.toString()}');
+    }
+  }
+
   //SEND TEXT MESSAGES (Enhanced)
   Future<void> sendTextMessage(String receiverId, String message) async {
     //get current user info
@@ -283,11 +329,24 @@ class ChatService extends ChangeNotifier {
   //HELPER METHOD TO SEND MESSAGE TO FIRESTORE
   Future<void> _sendMessageToFirestore(
     app_message.Message message,
-    String receiverId,
-  ) async {
-    List<String> ids = [message.senderId, receiverId];
-    ids.sort();
-    String chatRoomId = ids.join("_");
+    String receiverId, {
+    List<String>? additionalMembers,
+  }) async {
+    // Determine chat room ID and members
+    List<String> members;
+    String chatRoomId;
+
+    if (additionalMembers != null && additionalMembers.isNotEmpty) {
+      // Group chat
+      members = [message.senderId, receiverId, ...additionalMembers];
+      members.sort();
+      chatRoomId = members.join("_");
+    } else {
+      // Direct chat (existing logic)
+      members = [message.senderId, receiverId];
+      members.sort();
+      chatRoomId = members.join("_");
+    }
 
     // 1. Save message
     await _firestore
@@ -297,13 +356,15 @@ class ChatService extends ChangeNotifier {
         .add(message.toMap());
 
     // 2. Update chat room metadata
-    await _updateChatRoomMetadata(chatRoomId, message);
+    await _updateChatRoomMetadata(chatRoomId, message, members: members);
 
-    // 3. Increment unread count for receiver
-    await _incrementUnreadCount(chatRoomId, receiverId);
-
-    // 4. Send push notification to receiver
-    await _sendNotificationToReceiver(receiverId, message.message);
+    // 3. Increment unread count for all receivers (except sender)
+    final receivers = members.where((id) => id != message.senderId).toList();
+    for (final receiver in receivers) {
+      await _incrementUnreadCount(chatRoomId, receiver);
+      // 4. Send push notification to each receiver
+      await _sendNotificationToReceiver(receiver, message.message);
+    }
   }
 
   //HELPER METHOD TO SEND CUSTOM MESSAGE TO FIRESTORE
@@ -428,17 +489,29 @@ class ChatService extends ChangeNotifier {
   //UPDATE CHAT ROOM METADATA
   Future<void> _updateChatRoomMetadata(
     String chatRoomId,
-    app_message.Message message,
-  ) async {
+    app_message.Message message, {
+    List<String>? members,
+  }) async {
     try {
-      await _firestore.collection('chat_rooms').doc(chatRoomId).set({
-        'members': [message.senderId, message.receiverId],
+      final metadata = {
+        'members': members ?? [message.senderId, message.receiverId],
         'lastMessage': message.toMap(),
         'lastActivity': FieldValue.serverTimestamp(),
         'messageCount': FieldValue.increment(1),
         if (message.fileAttachment != null)
           'fileCount': FieldValue.increment(1),
-      }, SetOptions(merge: true));
+      };
+
+      // For group chats, don't override existing group info
+      if (members != null && members.length > 2) {
+        metadata['memberCount'] = members.length;
+        metadata['chatType'] = 'group';
+      }
+
+      await _firestore
+          .collection('chat_rooms')
+          .doc(chatRoomId)
+          .set(metadata, SetOptions(merge: true));
     } catch (e) {
       // Don't throw error for metadata update failure
       debugPrint('Failed to update chat room metadata: $e');
