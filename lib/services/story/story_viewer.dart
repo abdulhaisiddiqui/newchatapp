@@ -28,14 +28,22 @@ class _StoryViewerPageState extends State<StoryViewerPage> {
         return StoryItem.pageImage(
           url: storyData["url"] ?? "",
           controller: _storyController,
-          caption: widget.userData["username"] ?? "Unknown",
+          caption: Text(
+            widget.userData["username"] ?? "Unknown",
+            style: const TextStyle(fontSize: 15, color: Colors.white),
+            textAlign: TextAlign.center,
+          ),
           duration: const Duration(seconds: 5),
         );
       } else if (storyData["type"] == "video") {
         return StoryItem.pageVideo(
           storyData["url"] ?? "",
           controller: _storyController,
-          caption: widget.userData["username"] ?? "Unknown",
+          caption: Text(
+            widget.userData["username"] ?? "Unknown",
+            style: const TextStyle(fontSize: 15, color: Colors.white),
+            textAlign: TextAlign.center,
+          ),
           duration: const Duration(seconds: 10),
         );
       } else {

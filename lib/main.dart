@@ -11,9 +11,11 @@ import 'package:chatapp/services/secure_storage_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:provider/provider.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 
 // 1) Background handler (top-level)
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -37,132 +39,158 @@ const AndroidNotificationChannel channel = AndroidNotificationChannel(
 );
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-
-  // ✅ CRITICAL: Initialize call manager to start listening for incoming calls
-  await CallManager.instance.initialize();
-
-  // Background handler register
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-
-  // 🔔 Initialize Awesome Notifications
-  await AwesomeNotifications().initialize(
-    null, // icon asset name for Android, or null for default app icon
-    [
-      NotificationChannel(
-        channelKey: 'chat_messages',
-        channelName: 'Chat Messages',
-        channelDescription: 'Notifications for new chat messages',
-        defaultColor: const Color(0xFF1976D2),
-        importance: NotificationImportance.High,
-        channelShowBadge: true,
-        playSound: true,
-        enableVibration: true,
-      ),
-      NotificationChannel(
-        channelKey: 'stories',
-        channelName: 'Story Updates',
-        channelDescription: 'Alerts for story uploads and updates',
-        defaultColor: const Color(0xFF00BCD4),
-        importance: NotificationImportance.Default,
-        channelShowBadge: true,
-        playSound: true,
-        enableVibration: true,
-      ),
-      NotificationChannel(
-        channelKey: 'calls',
-        channelName: 'Call Notifications',
-        channelDescription: 'Incoming call alerts',
-        defaultColor: const Color(0xFF4CAF50),
-        importance: NotificationImportance.Max,
-        channelShowBadge: false,
-        playSound: true,
-        enableVibration: true,
-        criticalAlerts: true,
-      ),
-    ],
-  );
-
-  // 🔹 Ask user permission (for iOS & Android 13+)
-  await AwesomeNotifications().isNotificationAllowed().then((isAllowed) {
-    if (!isAllowed) {
-      AwesomeNotifications().requestPermissionToSendNotifications();
-    }
-  });
-
-  // 🚀 Set up notification listeners
-  AwesomeNotifications().setListeners(
-    onActionReceivedMethod: (ReceivedAction receivedAction) async {
-      final payload = receivedAction.payload ?? {};
-
-      // Handle reply from notification
-      if (receivedAction.buttonKeyPressed == 'REPLY' &&
-          receivedAction.buttonKeyInput.isNotEmpty) {
-        final chatRoomId = payload['chatRoomId'];
-        final message = receivedAction.buttonKeyInput;
-
-        if (chatRoomId != null) {
-          // Send reply message to Firestore
-          // This would need to be implemented in your chat service
-          print('Reply from notification: $message to chat $chatRoomId');
-        }
-      }
-      // Handle normal notification tap
-      else if (receivedAction.channelKey == 'chat_messages') {
-        final chatRoomId = payload['chatRoomId'];
-        final receiverId = payload['receiverId'];
-        final receiverEmail = payload['receiverEmail'];
-
-        if (chatRoomId != null && receiverId != null && receiverEmail != null) {
-          navigatorKey.currentState?.pushNamed(
-            '/chat',
-            arguments: {
-              'receiverUserId': receiverId,
-              'receiverUserEmail': receiverEmail,
-            },
-          );
-        }
-      } else if (receivedAction.channelKey == 'stories') {
-        navigatorKey.currentState?.pushNamed('/home');
-      } else if (receivedAction.channelKey == 'calls') {
-        final callerId = payload['callerId'];
-        if (callerId != null) {
-          // Handle call notifications
-          print('Incoming call from: $callerId');
-        }
-      }
+  await SentryFlutter.init(
+    (options) {
+      options.dsn =
+          'https://45d6ea8ba3eeadf9b5edd43d4d296f7a@o4510137199951872.ingest.de.sentry.io/4510137202638928';
+      // Set tracesSampleRate to 1.0 to capture 100% of transactions for tracing.
+      // We recommend adjusting this value in production.
+      options.tracesSampleRate = 1.0;
     },
-  );
+    appRunner: () async {
+      // Ensure Flutter binding is initialized in the same zone as runApp
+      WidgetsFlutterBinding.ensureInitialized();
 
-  // Init local notifications (keeping for Firebase messaging compatibility)
-  const AndroidInitializationSettings androidInit =
-      AndroidInitializationSettings('@mipmap/ic_launcher');
-  final DarwinInitializationSettings iosInit = DarwinInitializationSettings();
-  final InitializationSettings initSettings = InitializationSettings(
-    android: androidInit,
-    iOS: iosInit,
-  );
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
 
-  await flutterLocalNotificationsPlugin.initialize(
-    initSettings,
-    onDidReceiveNotificationResponse: (payload) {
-      // handle tap
+      // ✅ CRITICAL: Initialize call manager to start listening for incoming calls
+      await CallManager.instance.initialize();
+
+      // Background handler register
+      FirebaseMessaging.onBackgroundMessage(
+        _firebaseMessagingBackgroundHandler,
+      );
+
+      // 🔔 Initialize Awesome Notifications
+      await AwesomeNotifications().initialize(
+        null, // icon asset name for Android, or null for default app icon
+        [
+          NotificationChannel(
+            channelKey: 'chat_messages',
+            channelName: 'Chat Messages',
+            channelDescription: 'Notifications for new chat messages',
+            defaultColor: const Color(0xFF1976D2),
+            importance: NotificationImportance.High,
+            channelShowBadge: true,
+            playSound: true,
+            enableVibration: true,
+          ),
+          NotificationChannel(
+            channelKey: 'stories',
+            channelName: 'Story Updates',
+            channelDescription: 'Alerts for story uploads and updates',
+            defaultColor: const Color(0xFF00BCD4),
+            importance: NotificationImportance.Default,
+            channelShowBadge: true,
+            playSound: true,
+            enableVibration: true,
+          ),
+          NotificationChannel(
+            channelKey: 'calls',
+            channelName: 'Call Notifications',
+            channelDescription: 'Incoming call alerts',
+            defaultColor: const Color(0xFF4CAF50),
+            importance: NotificationImportance.Max,
+            channelShowBadge: false,
+            playSound: true,
+            enableVibration: true,
+            criticalAlerts: true,
+          ),
+        ],
+      );
+
+      // 🔹 Ask user permission (for iOS & Android 13+)
+      await AwesomeNotifications().isNotificationAllowed().then((isAllowed) {
+        if (!isAllowed) {
+          AwesomeNotifications().requestPermissionToSendNotifications();
+        }
+      });
+
+      // 🚀 Set up notification listeners
+      AwesomeNotifications().setListeners(
+        onActionReceivedMethod: (ReceivedAction receivedAction) async {
+          final payload = receivedAction.payload ?? {};
+
+          // Handle reply from notification
+          if (receivedAction.buttonKeyPressed == 'REPLY' &&
+              receivedAction.buttonKeyInput.isNotEmpty) {
+            final chatRoomId = payload['chatRoomId'];
+            final message = receivedAction.buttonKeyInput;
+
+            if (chatRoomId != null) {
+              // Send reply message to Firestore
+              // This would need to be implemented in your chat service
+              print('Reply from notification: $message to chat $chatRoomId');
+            }
+          }
+          // Handle normal notification tap
+          else if (receivedAction.channelKey == 'chat_messages') {
+            final chatRoomId = payload['chatRoomId'];
+            final receiverId = payload['receiverId'];
+            final receiverEmail = payload['receiverEmail'];
+
+            if (chatRoomId != null &&
+                receiverId != null &&
+                receiverEmail != null) {
+              navigatorKey.currentState?.push(
+                MaterialPageRoute(
+                  builder: (context) => ChatPage(
+                    receiverUserId: receiverId,
+                    receiverUserEmail: receiverEmail,
+                  ),
+                ),
+              );
+            }
+          } else if (receivedAction.channelKey == 'stories') {
+            navigatorKey.currentState?.pushNamed('/home');
+          } else if (receivedAction.channelKey == 'calls') {
+            final callerId = payload['callerId'];
+            if (callerId != null) {
+              // Handle call notifications
+              print('Incoming call from: $callerId');
+            }
+          }
+        },
+      );
+
+      // Init local notifications (keeping for Firebase messaging compatibility)
+      const AndroidInitializationSettings androidInit =
+          AndroidInitializationSettings('@mipmap/ic_launcher');
+      final DarwinInitializationSettings iosInit =
+          DarwinInitializationSettings();
+      final InitializationSettings initSettings = InitializationSettings(
+        android: androidInit,
+        iOS: iosInit,
+      );
+
+      await flutterLocalNotificationsPlugin.initialize(
+        initSettings,
+        onDidReceiveNotificationResponse: (payload) {
+          // handle tap
+        },
+      );
+
+      // Create Android channel (keeping for Firebase messaging compatibility)
+      await flutterLocalNotificationsPlugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >()
+          ?.createNotificationChannel(channel);
+
+      // TODO: Remove this line after sending the first sample event to sentry.
+      await Sentry.captureException(Exception('This is a sample exception.'));
+
+      runApp(
+        SentryWidget(
+          child: ChangeNotifierProvider(
+            create: (context) => AuthService(),
+            child: const MyApp(),
+          ),
+        ),
+      );
     },
-  );
-
-  // Create Android channel (keeping for Firebase messaging compatibility)
-  await flutterLocalNotificationsPlugin
-      .resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin
-      >()
-      ?.createNotificationChannel(channel);
-
-  runApp(
-    ChangeNotifierProvider(
-      create: (context) => AuthService(),
-      child: const MyApp(),
-    ),
   );
 }
 
@@ -181,24 +209,76 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
-    requestPermissions();
-    getTokenAndSave();
-    setupListeners();
+    _initNotificationsAndPermissions();
   }
 
-  void requestPermissions() async {
-    if (Platform.isIOS) {
-      NotificationSettings settings = await _messaging.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
-      print('iOS permission: ${settings.authorizationStatus}');
+  Future<void> _initNotificationsAndPermissions() async {
+    // ------------- WEB -------------
+    if (kIsWeb) {
+      // On web we must ensure service-worker exists (web/firebase-messaging-sw.js)
+      // and request permission using the firebase_messaging API.
+      try {
+        NotificationSettings settings = await FirebaseMessaging.instance
+            .requestPermission(alert: true, badge: true, sound: true);
+        print('Web notification permission: ${settings.authorizationStatus}');
+
+        // Get a token for web (supply your VAPID key)
+        // Replace 'YOUR_WEB_VAPID_KEY_HERE' with your web VAPID key (Cloud Messaging -> Web configuration).
+        final token = await FirebaseMessaging.instance.getToken(
+          vapidKey: 'YOUR_WEB_VAPID_KEY_HERE',
+        );
+        print('FCM web token: $token');
+        _token = token;
+        if (token != null) {
+          final uid = await SecureStorageService().getUserId();
+          if (uid != null) {
+            await _firestore.collection('users').doc(uid).set({
+              'fcmTokens': FieldValue.arrayUnion([token]),
+            }, SetOptions(merge: true));
+
+            // Save FCM token to secure storage
+            await SecureStorageService().saveFCMToken(token);
+          }
+        }
+
+        FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
+          print('Token refreshed: $newToken');
+          final uid = await SecureStorageService().getUserId();
+          if (uid != null) {
+            await _firestore.collection('users').doc(uid).set({
+              'fcmTokens': FieldValue.arrayUnion([newToken]),
+            }, SetOptions(merge: true));
+
+            // Update FCM token in secure storage
+            await SecureStorageService().saveFCMToken(newToken);
+          }
+        });
+      } catch (e, st) {
+        print('Web messaging init error: $e\n$st');
+      }
+      return;
     }
-  }
 
-  void getTokenAndSave() async {
-    String? token = await _messaging.getToken();
+    // ------------- MOBILE (Android / iOS) -------------
+    // Only execute Platform.* when not on web
+    try {
+      if (Platform.isIOS) {
+        // iOS permission
+        await FirebaseMessaging.instance.requestPermission(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
+      } else if (Platform.isAndroid) {
+        // For Android 13+, you may need POST_NOTIFICATIONS permission; handle with permission_handler if needed.
+        // Many Android devices don't require explicit runtime permission pre Android 13.
+      }
+    } catch (e) {
+      print('Mobile permission error: $e');
+    }
+
+    // Get token and save for mobile
+    String? token = await FirebaseMessaging.instance.getToken();
     print('FCM token: $token');
     _token = token;
     if (token != null) {
@@ -225,9 +305,8 @@ class _MyAppState extends State<MyApp> {
         await SecureStorageService().saveFCMToken(newToken);
       }
     });
-  }
 
-  void setupListeners() {
+    // Setup listeners for mobile
     // Foreground message
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       print('onMessage: ${message.notification?.title}');
@@ -269,51 +348,33 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      navigatorKey: navigatorKey, // Add navigator key for notifications
+      navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primaryColor: const Color(0xFF1976D2),
-        scaffoldBackgroundColor: Colors.white,
-        fontFamily: 'Roboto',
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF1976D2),
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          ),
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          focusedBorder: const OutlineInputBorder(
-            borderSide: BorderSide(color: Color(0xFF1976D2), width: 2),
-            borderRadius: BorderRadius.all(Radius.circular(12)),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderSide: BorderSide(color: Colors.grey.shade300, width: 1),
-            borderRadius: const BorderRadius.all(Radius.circular(12)),
-          ),
-        ),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
       ),
-      initialRoute: '/',
+      home: const SplashScreen(),
       routes: {
-        '/': (context) => const SplashScreen(),
         '/auth': (context) => const AuthGate(),
         '/home': (context) => const BottomNavScreen(),
-        '/chat': (context) {
-          final args =
-              ModalRoute.of(context)?.settings.arguments
-                  as Map<String, dynamic>?;
+      },
+      onGenerateRoute: (settings) {
+        if (settings.name == '/chat') {
+          final args = settings.arguments as Map<String, String>?;
           if (args != null) {
-            return ChatPage(
-              receiverUserId: args['receiverUserId'] as String,
-              receiverUserEmail: args['receiverUserEmail'] as String,
+            // Handle both argument formats
+            final userId = args['receiverUserId'] ?? args['userId'] ?? '';
+            final userEmail =
+                args['receiverUserEmail'] ?? args['username'] ?? '';
+            return MaterialPageRoute(
+              builder: (context) => ChatPage(
+                receiverUserId: userId,
+                receiverUserEmail: userEmail,
+              ),
             );
           }
-          return const BottomNavScreen(); // Fallback
-        },
+        }
+        return null;
       },
     );
   }

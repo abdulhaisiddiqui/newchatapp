@@ -4,6 +4,8 @@ enum MessageType {
   video,
   document,
   audio,
+  location,
+  contact,
   other;
 
   String get displayName {
@@ -18,6 +20,10 @@ enum MessageType {
         return 'Document';
       case MessageType.audio:
         return 'Audio';
+      case MessageType.location:
+        return 'Location';
+      case MessageType.contact:
+        return 'Contact';
       case MessageType.other:
         return 'File';
     }
@@ -35,6 +41,10 @@ enum MessageType {
         return MessageType.document;
       case 'audio':
         return MessageType.audio;
+      case 'location':
+        return MessageType.location;
+      case 'contact':
+        return MessageType.contact;
       default:
         return MessageType.other;
     }

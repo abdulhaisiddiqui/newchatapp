@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:sentry/sentry.dart';
 
 class SettingScreen extends StatelessWidget {
   const SettingScreen({super.key});
@@ -175,6 +176,24 @@ class SettingScreen extends StatelessWidget {
                         "Network usage, storage usage",
                       ),
                       buildSettingsTile(Icons.group_add, "Invite a friend", ""),
+                      const SizedBox(height: 20),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          'Developer Options',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ),
+                      buildSettingsTile(
+                        Icons.bug_report,
+                        "Debug & Testing",
+                        "Test error reporting and diagnostics",
+                        onTap: () => _showDebugDialog(context),
+                      ),
                     ],
                   );
                 },
@@ -216,6 +235,65 @@ class SettingScreen extends StatelessWidget {
               openAppSettings();
             },
             child: const Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDebugDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Debug & Testing'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Use these tools to test error reporting and diagnostics.',
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () async {
+                // Create intentional error for Sentry testing
+                try {
+                  throw StateError(
+                    'This is a test exception for Sentry verification',
+                  );
+                } catch (exception, stackTrace) {
+                  await Sentry.captureException(
+                    exception,
+                    stackTrace: stackTrace,
+                  );
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Test error sent to Sentry!'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Send Test Error to Sentry'),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'This will create a test exception and send it to Sentry for verification.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
           ),
         ],
       ),

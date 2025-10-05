@@ -1,11 +1,15 @@
-import 'package:chatapp/model/message.dart';
-import 'package:chatapp/model/message_type.dart';
+import 'package:chatapp/model/message.dart' as app_message;
+import 'package:chatapp/model/message_type.dart' as app_message_type;
 import 'package:chatapp/model/file_attachment.dart';
+import 'package:chatapp/model/custom_message.dart';
 import 'package:chatapp/services/notification_service.dart';
+import 'package:chatview/chatview.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class ChatService extends ChangeNotifier {
   // get instance of auth and firestore
@@ -29,20 +33,20 @@ class ChatService extends ChangeNotifier {
     final Timestamp timestamp = Timestamp.now();
 
     //create a new message
-    Message newMessage = Message(
+    app_message.Message newMessage = app_message.Message(
       senderId: currentUserId,
       senderEmail: currentUserEmail,
       receiverId: receiverId,
       message: message,
       timestamp: timestamp,
-      type: MessageType.text,
+      type: app_message_type.MessageType.text,
       isRead: false, // New messages are unread by default
     );
 
     await _sendMessageToFirestore(newMessage, receiverId);
   }
 
-  //SEND CONTACT MESSAGES
+  //SEND CONTACT MESSAGES (Updated for CustomMessage)
   Future<void> sendContactMessage({
     required String receiverId,
     required String contactName,
@@ -55,28 +59,28 @@ class ChatService extends ChangeNotifier {
     }
     final String currentUserId = currentUser.uid;
     final String currentUserEmail = currentUser.email ?? 'unknown@example.com';
-    final Timestamp timestamp = Timestamp.now();
 
-    //create a new contact message
-    Message newMessage = Message(
-      senderId: currentUserId,
-      senderEmail: currentUserEmail,
-      receiverId: receiverId,
+    // Create ChatUser for chatview
+    final ChatUser sender = ChatUser(id: currentUserId, name: currentUserEmail);
+
+    // Create custom message
+    final customMessage = CustomMessage(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
       message: 'Shared contact: $contactName',
-      timestamp: timestamp,
-      type: MessageType.other, // We'll handle contact type in the data
+      sender: sender,
+      createdAt: DateTime.now(),
+      customType: CustomMessageType.contact,
+      extraData: {
+        'name': contactName,
+        'phone': contactPhone,
+        'senderEmail': currentUserEmail,
+      },
     );
 
-    // Add contact data to the message
-    final messageData = newMessage.toMap();
-    messageData['contactName'] = contactName;
-    messageData['contactPhone'] = contactPhone;
-    messageData['messageType'] = 'contact'; // Custom type for contacts
-
-    await _sendMessageToFirestoreWithData(messageData, receiverId);
+    await _sendCustomMessageToFirestore(customMessage, receiverId);
   }
 
-  //SEND LOCATION MESSAGES
+  //SEND LOCATION MESSAGES (Updated for CustomMessage)
   Future<void> sendLocationMessage({
     required String receiverId,
     required double latitude,
@@ -90,26 +94,27 @@ class ChatService extends ChangeNotifier {
     }
     final String currentUserId = currentUser.uid;
     final String currentUserEmail = currentUser.email ?? 'unknown@example.com';
-    final Timestamp timestamp = Timestamp.now();
 
-    //create a new location message
-    Message newMessage = Message(
-      senderId: currentUserId,
-      senderEmail: currentUserEmail,
-      receiverId: receiverId,
+    // Create ChatUser for chatview
+    final ChatUser sender = ChatUser(id: currentUserId, name: currentUserEmail);
+
+    // Create custom message
+    final customMessage = CustomMessage(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
       message: 'Shared location',
-      timestamp: timestamp,
-      type: MessageType.other, // We'll handle location type in the data
+      sender: sender,
+      createdAt: DateTime.now(),
+      customType: CustomMessageType.location,
+      extraData: {
+        'lat': latitude,
+        'lng': longitude,
+        'address': 'Shared location',
+        'mapsUrl': mapsUrl,
+        'senderEmail': currentUserEmail,
+      },
     );
 
-    // Add location data to the message
-    final messageData = newMessage.toMap();
-    messageData['latitude'] = latitude;
-    messageData['longitude'] = longitude;
-    messageData['mapsUrl'] = mapsUrl;
-    messageData['messageType'] = 'location'; // Custom type for locations
-
-    await _sendMessageToFirestoreWithData(messageData, receiverId);
+    await _sendCustomMessageToFirestore(customMessage, receiverId);
   }
 
   //SEND FILE MESSAGES
@@ -128,13 +133,13 @@ class ChatService extends ChangeNotifier {
     final Timestamp timestamp = Timestamp.now();
 
     //create a new file message
-    Message newMessage = Message(
+    app_message.Message newMessage = app_message.Message(
       senderId: currentUserId,
       senderEmail: currentUserEmail,
       receiverId: receiverId,
       message: textMessage ?? '',
       timestamp: timestamp,
-      type: MessageType.fromMimeType(fileAttachment.mimeType),
+      type: app_message_type.MessageType.fromMimeType(fileAttachment.mimeType),
       fileAttachment: fileAttachment,
       isRead: false, // New messages are unread by default
     );
@@ -147,7 +152,7 @@ class ChatService extends ChangeNotifier {
     required String receiverId,
     required String message,
     required String replyToMessageId,
-    MessageType type = MessageType.text,
+    app_message_type.MessageType type = app_message_type.MessageType.text,
     FileAttachment? fileAttachment,
   }) async {
     //get current user info
@@ -160,7 +165,7 @@ class ChatService extends ChangeNotifier {
     final Timestamp timestamp = Timestamp.now();
 
     //create a new reply message
-    Message newMessage = Message(
+    app_message.Message newMessage = app_message.Message(
       senderId: currentUserId,
       senderEmail: currentUserEmail,
       receiverId: receiverId,
@@ -277,7 +282,7 @@ class ChatService extends ChangeNotifier {
 
   //HELPER METHOD TO SEND MESSAGE TO FIRESTORE
   Future<void> _sendMessageToFirestore(
-    Message message,
+    app_message.Message message,
     String receiverId,
   ) async {
     List<String> ids = [message.senderId, receiverId];
@@ -301,6 +306,40 @@ class ChatService extends ChangeNotifier {
     await _sendNotificationToReceiver(receiverId, message.message);
   }
 
+  //HELPER METHOD TO SEND CUSTOM MESSAGE TO FIRESTORE
+  Future<void> _sendCustomMessageToFirestore(
+    CustomMessage customMessage,
+    String receiverId,
+  ) async {
+    List<String> ids = [customMessage.sender.id, receiverId];
+    ids.sort();
+    String chatRoomId = ids.join("_");
+
+    // 1. Save custom message
+    await _firestore
+        .collection('chat_rooms')
+        .doc(chatRoomId)
+        .collection('messages')
+        .add(customMessage.toFirestore());
+
+    // 2. Create a legacy Message object for metadata update
+    final legacyMessage = app_message.Message(
+      senderId: customMessage.sender.id,
+      senderEmail: customMessage.extraData?['senderEmail'] ?? '',
+      receiverId: receiverId,
+      message: customMessage.message,
+      timestamp: Timestamp.fromDate(customMessage.createdAt),
+      type: app_message_type.MessageType.text,
+      isRead: false,
+    );
+
+    // 3. Update chat room metadata
+    await _updateChatRoomMetadata(chatRoomId, legacyMessage);
+
+    // 4. Send push notification to receiver
+    await _sendNotificationToReceiver(receiverId, customMessage.message);
+  }
+
   //HELPER METHOD TO SEND MESSAGE TO FIRESTORE WITH CUSTOM DATA
   Future<void> _sendMessageToFirestoreWithData(
     Map<String, dynamic> messageData,
@@ -319,7 +358,7 @@ class ChatService extends ChangeNotifier {
         .add(messageData);
 
     // 2. Create a Message object for metadata update
-    final message = Message.fromMap(messageData);
+    final message = app_message.Message.fromMap(messageData);
 
     // 3. Update chat room metadata
     await _updateChatRoomMetadata(chatRoomId, message);
@@ -344,11 +383,42 @@ class ChatService extends ChangeNotifier {
       List<dynamic> tokens = userDoc['fcmTokens'] ?? [];
       if (tokens.isEmpty) return;
 
+      // FCM Server Key - Get this from Firebase Console > Project Settings > Cloud Messaging > Server Key
+      const String serverKey =
+          'YOUR_FCM_SERVER_KEY_HERE'; // Replace with actual server key
+
       for (String token in tokens) {
-        await FirebaseMessaging.instance.sendMessage(
-          to: token,
-          data: {'title': 'New Message', 'body': message},
+        final response = await http.post(
+          Uri.parse('https://fcm.googleapis.com/fcm/send'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'key=$serverKey',
+          },
+          body: jsonEncode({
+            'to': token,
+            'notification': {
+              'title': 'New Message',
+              'body': message.length > 100
+                  ? '${message.substring(0, 100)}...'
+                  : message,
+              'sound': 'default',
+              'badge': '1',
+            },
+            'data': {
+              'click_action': 'FLUTTER_NOTIFICATION_CLICK',
+              'message_type': 'chat_message',
+              'sender_id': _firebaseAuth.currentUser?.uid ?? '',
+              'receiver_id': receiverId,
+            },
+            'priority': 'high',
+          }),
         );
+
+        if (response.statusCode == 200) {
+          debugPrint('Push notification sent successfully to $token');
+        } else {
+          debugPrint('Failed to send push notification: ${response.body}');
+        }
       }
     } catch (e) {
       debugPrint("Failed to send notification: $e");
@@ -358,7 +428,7 @@ class ChatService extends ChangeNotifier {
   //UPDATE CHAT ROOM METADATA
   Future<void> _updateChatRoomMetadata(
     String chatRoomId,
-    Message message,
+    app_message.Message message,
   ) async {
     try {
       await _firestore.collection('chat_rooms').doc(chatRoomId).set({
@@ -366,7 +436,8 @@ class ChatService extends ChangeNotifier {
         'lastMessage': message.toMap(),
         'lastActivity': FieldValue.serverTimestamp(),
         'messageCount': FieldValue.increment(1),
-        if (message.hasFileAttachment) 'fileCount': FieldValue.increment(1),
+        if (message.fileAttachment != null)
+          'fileCount': FieldValue.increment(1),
       }, SetOptions(merge: true));
     } catch (e) {
       // Don't throw error for metadata update failure
@@ -389,7 +460,10 @@ class ChatService extends ChangeNotifier {
   }
 
   //GET MESSAGES WITH ENHANCED PARSING
-  Stream<List<Message>> getMessagesStream(String userId, String otherUserId) {
+  Stream<List<app_message.Message>> getMessagesStream(
+    String userId,
+    String otherUserId,
+  ) {
     //construct chat room id from user ids (sorted to ensure it matches the id used when sending messages)
     List<String> ids = [userId, otherUserId];
     ids.sort();
@@ -406,7 +480,7 @@ class ChatService extends ChangeNotifier {
             Map<String, dynamic> docData = doc.data();
             Map<String, dynamic> data = Map<String, dynamic>.from(docData);
             data['id'] = doc.id; // Add document ID for editing/deleting
-            return Message.fromMap(data);
+            return app_message.Message.fromMap(data);
           }).toList();
         });
   }
@@ -434,10 +508,10 @@ class ChatService extends ChangeNotifier {
   }
 
   //SEARCH MESSAGES
-  Future<List<Message>> searchMessages({
+  Future<List<app_message.Message>> searchMessages({
     required String chatRoomId,
     required String query,
-    MessageType? type,
+    app_message_type.MessageType? type,
   }) async {
     try {
       Query messagesQuery = _firestore
@@ -453,9 +527,12 @@ class ChatService extends ChangeNotifier {
 
       QuerySnapshot snapshot = await messagesQuery.get();
 
-      List<Message> messages = snapshot.docs
+      List<app_message.Message> messages = snapshot.docs
           .where((doc) => doc.data() != null)
-          .map((doc) => Message.fromMap(doc.data() as Map<String, dynamic>))
+          .map(
+            (doc) =>
+                app_message.Message.fromMap(doc.data() as Map<String, dynamic>),
+          )
           .where(
             (message) =>
                 message.message.toLowerCase().contains(query.toLowerCase()) ||
@@ -526,7 +603,7 @@ class ChatService extends ChangeNotifier {
   //GET FILES FROM CHAT
   Future<List<FileAttachment>> getChatFiles({
     required String chatRoomId,
-    MessageType? fileType,
+    app_message_type.MessageType? fileType,
   }) async {
     try {
       Query messagesQuery = _firestore
@@ -544,7 +621,10 @@ class ChatService extends ChangeNotifier {
 
       List<FileAttachment> files = snapshot.docs
           .where((doc) => doc.data() != null)
-          .map((doc) => Message.fromMap(doc.data() as Map<String, dynamic>))
+          .map(
+            (doc) =>
+                app_message.Message.fromMap(doc.data() as Map<String, dynamic>),
+          )
           .where((message) => message.fileAttachment != null)
           .map((message) => message.fileAttachment!)
           .toList();

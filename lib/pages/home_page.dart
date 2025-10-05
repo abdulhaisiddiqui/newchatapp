@@ -192,6 +192,7 @@ class _HomePageState extends State<HomePage> {
             padding: const EdgeInsets.only(right: 24),
             child: CircleAvatar(
               backgroundImage: AssetImage('assets/images/user.png'),
+              radius: 20,
             ),
           ),
           IconButton(
@@ -202,7 +203,7 @@ class _HomePageState extends State<HomePage> {
       ),
       body: FloatingSearchBar(
         hint: 'Search users...',
-        scrollPadding: const EdgeInsets.only(top: 16, bottom: 56),
+        scrollPadding: const EdgeInsets.only(top: 16, bottom: 80),
         transitionDuration: const Duration(milliseconds: 800),
         transitionCurve: Curves.easeInOut,
         physics: const BouncingScrollPhysics(),
@@ -341,7 +342,7 @@ class _HomePageState extends State<HomePage> {
           children: [
             // 👇 Stories Section
             Padding(
-              padding: const EdgeInsets.only(top: 30),
+              padding: const EdgeInsets.only(top: 50),
               child: Container(
                 height: 110,
                 padding: const EdgeInsets.symmetric(
@@ -545,7 +546,6 @@ class _HomePageState extends State<HomePage> {
             final chatRoom = docs[index];
             // defensive extraction of data
             final raw = chatRoom.data() as Map<String, dynamic>? ?? {};
-            debugPrint('chat_room[${chatRoom.id}] -> $raw');
 
             // members may be List<dynamic>, convert safely to List<String>
             List<String> members = [];

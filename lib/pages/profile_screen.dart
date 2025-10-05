@@ -5,6 +5,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -23,6 +24,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
   int _selectedIndex = 3; // Settings tab selected
 
   Future<void> _pickImage() async {
+    // Request permissions for Android 13+
+    List<Permission> permissionsToCheck = [Permission.photos];
+    if (Platform.isAndroid) {
+      // For older Android versions, photos permission might not be available
+      try {
+        await Permission.photos.status;
+      } catch (e) {
+        permissionsToCheck = [Permission.storage];
+      }
+    }
+
+    bool hasPermission = true;
+    for (Permission permission in permissionsToCheck) {
+      PermissionStatus status = await permission.status;
+      if (status.isDenied || status.isLimited) {
+        status = await permission.request();
+      }
+      if (!status.isGranted) {
+        hasPermission = false;
+        break;
+      }
+    }
+
+    if (!hasPermission) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Gallery permission is required to select profile picture',
+          ),
+          action: SnackBarAction(label: 'Settings', onPressed: openAppSettings),
+        ),
+      );
+      return;
+    }
+
     final pickedFile = await ImagePicker().pickImage(
       source: ImageSource.gallery,
       imageQuality: 70,
@@ -410,9 +446,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final isSelected = _selectedIndex == index;
     return InkWell(
       onTap: () {
-        setState(() {
-          _selectedIndex = index;
-        });
+        if (_selectedIndex != index) {
+          setState(() {
+            _selectedIndex = index;
+          });
+          _handleNavigation(index);
+        }
       },
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -430,6 +469,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
     );
+  }
+
+  void _handleNavigation(int index) {
+    switch (index) {
+      case 0: // Message
+        Navigator.of(context).pushReplacementNamed('/home');
+        break;
+      case 1: // Calls
+        // Navigate to calls screen if it exists
+        break;
+      case 2: // Contacts
+        // Navigate to contacts screen if it exists
+        break;
+      case 3: // Settings (current screen)
+        // Already on settings
+        break;
+    }
   }
 
   void _navigateToEditProfile(

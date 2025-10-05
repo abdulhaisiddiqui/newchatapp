@@ -42,7 +42,9 @@ class StoryService with ErrorHandler {
               "text": text,
               "url": downloadUrl,
               "timestamp": FieldValue.serverTimestamp(),
-              "expiresAt": DateTime.now().add(const Duration(hours: 24)),
+              "expiresAt": DateTime.now().toUtc().add(
+                const Duration(hours: 24),
+              ),
             });
       },
       onError: (msg) {
@@ -107,7 +109,7 @@ class StoryService with ErrorHandler {
             .orderBy("timestamp", descending: true)
             .where(
               "expiresAt",
-              isGreaterThan: DateTime.now(),
+              isGreaterThan: DateTime.now().toUtc(),
             ) // Only show active stories
             .get();
 
@@ -164,7 +166,7 @@ class StoryService with ErrorHandler {
         final userStoriesSnap = await doc.reference
             .collection("userStories")
             .orderBy("timestamp", descending: true)
-            .where("expiresAt", isGreaterThan: DateTime.now())
+            .where("expiresAt", isGreaterThan: DateTime.now().toUtc())
             .get();
 
         if (userStoriesSnap.docs.isNotEmpty) {

@@ -168,8 +168,19 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
     setState(() => _isLoading = true);
 
     try {
-      // Check permissions
-      if (!await _checkPermissions([Permission.photos])) {
+      // Check permissions - use photos permission for Android 13+, storage for older
+      List<Permission> permissionsToCheck = [Permission.photos];
+      if (Platform.isAndroid) {
+        // For older Android versions, photos permission might not be available
+        // so we fall back to storage permission
+        try {
+          await Permission.photos.status;
+        } catch (e) {
+          permissionsToCheck = [Permission.storage];
+        }
+      }
+
+      if (!await _checkPermissions(permissionsToCheck)) {
         _showPermissionDeniedDialog();
         return;
       }
@@ -231,10 +242,16 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
     setState(() => _isLoading = true);
 
     try {
-      // Check permissions
-      if (!await _checkPermissions([Permission.storage])) {
-        _showPermissionDeniedDialog();
-        return;
+      // Check permissions - for Android 13+, file_picker handles permissions internally
+      // For older Android versions, we need storage permission
+      if (Platform.isAndroid) {
+        // Check Android version
+        // For simplicity, we'll request storage permission which works for older versions
+        // For Android 13+, the system file picker will handle permission requests
+        if (!await _checkPermissions([Permission.storage])) {
+          _showPermissionDeniedDialog();
+          return;
+        }
       }
 
       FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -308,8 +325,14 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
     setState(() => _isLoading = true);
 
     try {
-      // Check permissions
-      if (!await _checkPermissions([Permission.storage])) {
+      // Check permissions - for Android 13+, use audio permission
+      List<Permission> permissionsToCheck = [Permission.storage];
+      if (Platform.isAndroid) {
+        // For Android 13+, we can use Permission.audio for audio files
+        permissionsToCheck = [Permission.audio];
+      }
+
+      if (!await _checkPermissions(permissionsToCheck)) {
         _showPermissionDeniedDialog();
         return;
       }
@@ -385,7 +408,8 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
     for (Permission permission in permissions) {
       PermissionStatus status = await permission.status;
 
-      if (status.isDenied) {
+      if (status.isDenied || status.isLimited) {
+        // For Android 13+, some permissions might be limited
         status = await permission.request();
       }
 

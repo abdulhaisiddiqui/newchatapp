@@ -1,8 +1,6 @@
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:chatapp/components/chat_bubble.dart';
-import 'package:chatapp/components/file_picker_widget.dart';
 import 'package:chatapp/components/call/call_screen_widget.dart';
-import 'package:chatapp/components/voice_recorder.dart';
 import 'package:chatapp/pages/location_share_page.dart';
 import 'package:chatapp/pages/contact_share_page.dart';
 import 'package:chatapp/pages/image_viewer_page.dart';
@@ -20,7 +18,8 @@ import 'dart:io';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:geolocator/geolocator.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 
 class ChatPage extends StatefulWidget {
   final String receiverUserEmail;
@@ -43,15 +42,16 @@ class _ChatPageState extends State<ChatPage> {
   final FileService _fileService = FileService();
   final CallManagerInterface _callManager = CallManager.instance;
   final UserStatusService _userStatusService = UserStatusService();
+  final ImagePicker _imagePicker = ImagePicker();
 
   bool _isUploading = false;
   double _uploadProgress = 0.0;
-  String? _statusMessage;
   bool _isTyping = false;
   Timer? _typingTimer;
   Message? _replyToMessage;
   Map<String, String> _messageReactions = {};
   List<String> _chatImageUrls = [];
+  Set<String> _notifiedMessageIds = {};
 
   void sendMessage() async {
     if (_messageController.text.isNotEmpty) {
@@ -83,7 +83,6 @@ class _ChatPageState extends State<ChatPage> {
     setState(() {
       _isUploading = true;
       _uploadProgress = 0.0;
-      _statusMessage = 'Preparing files...';
     });
 
     try {
@@ -95,9 +94,6 @@ class _ChatPageState extends State<ChatPage> {
           messageId: DateTime.now().millisecondsSinceEpoch.toString(),
           onProgress: (progress) {
             setState(() => _uploadProgress = progress);
-          },
-          onStatusUpdate: (status) {
-            setState(() => _statusMessage = status);
           },
         );
 
@@ -136,7 +132,6 @@ class _ChatPageState extends State<ChatPage> {
       setState(() {
         _isUploading = false;
         _uploadProgress = 0.0;
-        _statusMessage = null;
       });
     }
   }
@@ -166,60 +161,6 @@ class _ChatPageState extends State<ChatPage> {
             : null,
       ),
     );
-  }
-
-  void _onVoiceRecordingComplete(String audioPath) async {
-    // Upload the recorded audio file and send as voice message
-    setState(() {
-      _isUploading = true;
-      _uploadProgress = 0.0;
-      _statusMessage = 'Uploading voice message...';
-    });
-
-    try {
-      final audioFile = File(audioPath);
-
-      // Upload voice file
-      final result = await _fileService.uploadFile(
-        file: audioFile,
-        chatRoomId: _getChatRoomId(),
-        messageId: DateTime.now().millisecondsSinceEpoch.toString(),
-        onProgress: (progress) {
-          setState(() => _uploadProgress = progress);
-        },
-        onStatusUpdate: (status) {
-          setState(() => _statusMessage = status);
-        },
-      );
-
-      if (result.isSuccess && result.fileId != null) {
-        // Get the file attachment from Firestore
-        final fileAttachment = await _fileService.getFileMetadata(
-          result.fileId!,
-        );
-
-        if (fileAttachment != null) {
-          // Send voice message
-          await _chatService.sendFileMessage(
-            receiverId: widget.receiverUserId,
-            fileAttachment: fileAttachment,
-            textMessage: '', // No text for voice messages
-          );
-        } else {
-          _showErrorSnackBar('Failed to get voice message metadata');
-        }
-      } else {
-        _showErrorSnackBar('Failed to upload voice message: ${result.error}');
-      }
-    } catch (e) {
-      _showErrorSnackBar('Error sending voice message: $e');
-    } finally {
-      setState(() {
-        _isUploading = false;
-        _uploadProgress = 0.0;
-        _statusMessage = null;
-      });
-    }
   }
 
   Future<void> _startAudioCall() async {
@@ -552,17 +493,31 @@ class _ChatPageState extends State<ChatPage> {
                 icon: const Icon(Icons.arrow_back, color: Colors.black),
                 onPressed: () => Navigator.pop(context),
               ),
-              CircleAvatar(
-                backgroundImage: AssetImage('assets/images/user.png'),
-                radius: 18, // Slightly smaller
-                child: Align(
-                  alignment: Alignment.bottomRight,
-                  child: UserStatusIndicator(
-                    userId: widget.receiverUserId,
-                    showText: false,
-                    size: 9,
+              Stack(
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: Colors.grey[300],
+                    child: Text(
+                      widget.receiverUserEmail.isNotEmpty
+                          ? widget.receiverUserEmail[0].toUpperCase()
+                          : 'U',
+                      style: const TextStyle(
+                        color: Colors.black,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
-                ),
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: UserStatusIndicator(
+                      userId: widget.receiverUserId,
+                      showText: false,
+                      size: 9,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(width: 8), // Reduced spacing
               Expanded(
@@ -653,119 +608,117 @@ class _ChatPageState extends State<ChatPage> {
               ),
             ),
 
-          // ✅ Bottom Input Bar (from MessageScreen)
-          Container(
-            height: _replyToMessage != null ? 120 : 90,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: const BoxDecoration(color: Colors.white),
-            child: Row(
-              children: [
-                Semantics(
-                  label: 'Attach files to message',
-                  hint: 'Tap to select files, photos, or documents to share',
-                  child: ChatFilePickerButton(
-                    onFilesSelected: _handleFileSelection,
-                    maxFiles: 5,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(13),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Semantics(
-                            label: 'Message input field',
-                            hint: 'Type your message here',
-                            child: TextField(
-                              controller: _messageController,
-                              decoration: const InputDecoration(
-                                hintText: "Write your message",
-                                border: InputBorder.none,
-                              ),
-                              maxLines: null,
-                              textInputAction: TextInputAction.send,
-                              onChanged: (text) {
-                                // Update typing status
-                                _userStatusService.setTypingStatus(
-                                  _getChatRoomId(),
-                                  text.isNotEmpty,
-                                );
-                              },
-                              onSubmitted: (_) =>
-                                  _isUploading ? null : sendMessage(),
-                            ),
-                          ),
-                        ),
-                        if (_isUploading) ...[
-                          SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              value: _uploadProgress,
-                              strokeWidth: 2,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                        ],
-                        IconButton(
-                          onPressed: _isUploading ? null : sendMessage,
-                          icon: const Icon(
-                            Icons.send,
-                            color: Colors.teal,
-                            size: 24,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                IconButton(
-                  onPressed: _pickAndShareContact,
-                  icon: const Icon(
-                    Icons.contacts,
-                    color: Colors.black,
-                    size: 24,
-                  ),
-                  tooltip: 'Share contact',
-                ),
-                const SizedBox(width: 10),
-                IconButton(
-                  onPressed: _shareLocation,
-                  icon: const Icon(
-                    Icons.location_on,
-                    color: Colors.black,
-                    size: 24,
-                  ),
-                  tooltip: 'Share location',
-                ),
-                const SizedBox(width: 10),
-                const Icon(
-                  Icons.photo_camera_outlined,
-                  color: Colors.black,
-                  size: 24,
-                ),
-                const SizedBox(width: 10),
-                if (!kIsWeb) ...[
-                  VoiceRecorder(onStop: _onVoiceRecordingComplete),
-                ] else ...[
-                  Tooltip(
-                    message: 'Voice messages not available on web',
-                    child: const Icon(
-                      Icons.mic_off,
-                      color: Colors.grey,
-                      size: 24,
-                    ),
-                  ),
-                ],
-              ],
-            ),
+          // ✅ Bottom Input Bar
+          ChatInputBar(
+            messageController: _messageController,
+            onSendMessage: sendMessage,
+            onFilesSelected: _handleFileSelection,
+            onCameraPressed: () async {
+              try {
+                // Check camera permission
+                if (!await _checkCameraPermission()) {
+                  _showPermissionDeniedDialog(
+                    'Camera permission is required to take photos',
+                  );
+                  return;
+                }
+
+                final XFile? image = await _imagePicker.pickImage(
+                  source: ImageSource.camera,
+                  imageQuality: 85,
+                );
+                if (image != null) {
+                  _handleFileSelection([File(image.path)]);
+                }
+              } catch (e) {
+                _showErrorSnackBar('Failed to open camera: $e');
+              }
+            },
+            onGalleryPressed: () async {
+              try {
+                // Check gallery permission
+                List<Permission> permissionsToCheck = [Permission.photos];
+                if (Platform.isAndroid) {
+                  // For older Android versions, photos permission might not be available
+                  try {
+                    await Permission.photos.status;
+                  } catch (e) {
+                    permissionsToCheck = [Permission.storage];
+                  }
+                }
+
+                bool hasPermission = true;
+                for (Permission permission in permissionsToCheck) {
+                  PermissionStatus status = await permission.status;
+                  if (status.isDenied || status.isLimited) {
+                    status = await permission.request();
+                  }
+                  if (!status.isGranted) {
+                    hasPermission = false;
+                    break;
+                  }
+                }
+
+                if (!hasPermission) {
+                  _showPermissionDeniedDialog(
+                    'Gallery permission is required to select photos',
+                  );
+                  return;
+                }
+
+                final XFile? image = await _imagePicker.pickImage(
+                  source: ImageSource.gallery,
+                  imageQuality: 85,
+                );
+                if (image != null) {
+                  _handleFileSelection([File(image.path)]);
+                }
+              } catch (e) {
+                _showErrorSnackBar('Failed to open gallery: $e');
+              }
+            },
+            onDocumentPressed: () async {
+              try {
+                // Check storage permission for documents
+                if (Platform.isAndroid) {
+                  PermissionStatus status = await Permission.storage.status;
+                  if (status.isDenied || status.isLimited) {
+                    status = await Permission.storage.request();
+                  }
+                  if (!status.isGranted) {
+                    _showPermissionDeniedDialog(
+                      'Storage permission is required to select documents',
+                    );
+                    return;
+                  }
+                }
+
+                FilePickerResult? result = await FilePicker.platform.pickFiles(
+                  type: FileType.any,
+                  allowMultiple: true,
+                );
+                if (result != null) {
+                  List<File> files = result.paths
+                      .where((path) => path != null)
+                      .map((path) => File(path!))
+                      .toList();
+                  _handleFileSelection(files);
+                }
+              } catch (e) {
+                _showErrorSnackBar('Failed to pick documents: $e');
+              }
+            },
+            onContactPressed: _pickAndShareContact,
+            onLocationPressed: _shareLocation,
+            onVoiceRecordStart: () {
+              // Voice recording is handled by the VoiceRecorder widget separately
+            },
+            onVoiceRecordStop: () {
+              // Voice recording is handled by the VoiceRecorder widget separately
+            },
+            isUploading: _isUploading,
+            uploadProgress: _uploadProgress,
+            isWeb: kIsWeb,
           ),
         ],
       ),
@@ -839,8 +792,12 @@ class _ChatPageState extends State<ChatPage> {
               final messages = snapshot.data!;
               if (messages.isNotEmpty) {
                 final latestMessage = messages.last;
+                final messageId = latestMessage.timestamp.millisecondsSinceEpoch
+                    .toString();
                 if (latestMessage.senderId != currentUser.uid &&
-                    !latestMessage.isRead) {
+                    !latestMessage.isRead &&
+                    !_notifiedMessageIds.contains(messageId)) {
+                  _notifiedMessageIds.add(messageId);
                   // Show local notification for new message
                   _chatService.showMessageNotification(
                     senderName: widget.receiverUserEmail,
@@ -963,5 +920,465 @@ class _ChatPageState extends State<ChatPage> {
     } catch (e) {
       _showErrorSnackBar('Download error: $e');
     }
+  }
+}
+
+// ============================================================================
+// CHAT INPUT BAR WIDGET
+// ============================================================================
+class ChatInputBar extends StatefulWidget {
+  final TextEditingController messageController;
+  final VoidCallback onSendMessage;
+  final Function(List<File>) onFilesSelected;
+  final VoidCallback onCameraPressed;
+  final VoidCallback onGalleryPressed;
+  final VoidCallback onDocumentPressed;
+  final VoidCallback onContactPressed;
+  final VoidCallback onLocationPressed;
+  final VoidCallback? onVoiceRecordStart;
+  final VoidCallback? onVoiceRecordStop;
+  final bool isUploading;
+  final double uploadProgress;
+  final bool isWeb;
+
+  const ChatInputBar({
+    Key? key,
+    required this.messageController,
+    required this.onSendMessage,
+    required this.onFilesSelected,
+    required this.onCameraPressed,
+    required this.onGalleryPressed,
+    required this.onDocumentPressed,
+    required this.onContactPressed,
+    required this.onLocationPressed,
+    this.onVoiceRecordStart,
+    this.onVoiceRecordStop,
+    this.isUploading = false,
+    this.uploadProgress = 0.0,
+    this.isWeb = false,
+  }) : super(key: key);
+
+  @override
+  State<ChatInputBar> createState() => _ChatInputBarState();
+}
+
+class _ChatInputBarState extends State<ChatInputBar>
+    with SingleTickerProviderStateMixin {
+  bool _hasText = false;
+  bool _showEmojiPicker = false;
+  bool _isRecording = false;
+  late AnimationController _micController;
+  late Animation<double> _micScaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.messageController.addListener(_onTextChanged);
+
+    // Mic button animation controller
+    _micController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
+    _micScaleAnimation = Tween<double>(
+      begin: 1.0,
+      end: 1.2,
+    ).animate(CurvedAnimation(parent: _micController, curve: Curves.easeInOut));
+  }
+
+  void _onTextChanged() {
+    final hasText = widget.messageController.text.trim().isNotEmpty;
+    if (hasText != _hasText) {
+      setState(() => _hasText = hasText);
+    }
+  }
+
+  void _showAttachmentMenu() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => AttachmentBottomSheet(
+        onCameraPressed: () {
+          Navigator.pop(context);
+          widget.onCameraPressed();
+        },
+        onGalleryPressed: () {
+          Navigator.pop(context);
+          widget.onGalleryPressed();
+        },
+        onDocumentPressed: () {
+          Navigator.pop(context);
+          widget.onDocumentPressed();
+        },
+        onContactPressed: () {
+          Navigator.pop(context);
+          widget.onContactPressed();
+        },
+        onLocationPressed: () {
+          Navigator.pop(context);
+          widget.onLocationPressed();
+        },
+      ),
+    );
+  }
+
+  void _handleMicPress() {
+    if (!widget.isWeb && widget.onVoiceRecordStart != null) {
+      setState(() => _isRecording = true);
+      _micController.forward();
+      widget.onVoiceRecordStart!();
+    }
+  }
+
+  void _handleMicRelease() {
+    if (_isRecording && widget.onVoiceRecordStop != null) {
+      setState(() => _isRecording = false);
+      _micController.reverse();
+      widget.onVoiceRecordStop!();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.messageController.removeListener(_onTextChanged);
+    _micController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            // Emoji Button
+            _buildIconButton(
+              icon: _showEmojiPicker
+                  ? Icons.keyboard
+                  : Icons.emoji_emotions_outlined,
+              onPressed: () {
+                setState(() => _showEmojiPicker = !_showEmojiPicker);
+                // TODO: Implement emoji picker toggle
+              },
+              color: Colors.grey.shade700,
+            ),
+            const SizedBox(width: 4),
+
+            // Message Input Field
+            Expanded(
+              child: Container(
+                constraints: const BoxConstraints(maxHeight: 120),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    // Text Field
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: TextField(
+                          controller: widget.messageController,
+                          maxLines: null,
+                          textInputAction: TextInputAction.newline,
+                          style: const TextStyle(fontSize: 16),
+                          decoration: InputDecoration(
+                            hintText: 'Message',
+                            hintStyle: TextStyle(color: Colors.grey.shade500),
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 12,
+                            ),
+                            filled: true,
+                            fillColor: Colors.grey.shade50,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // Attachment Button
+                    if (!_hasText)
+                      _buildIconButton(
+                        icon: Icons.attach_file,
+                        onPressed: _showAttachmentMenu,
+                        color: Colors.grey.shade700,
+                        padding: const EdgeInsets.only(right: 8),
+                      ),
+
+                    // Upload Progress Indicator
+                    if (widget.isUploading)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8, bottom: 10),
+                        child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            value: widget.uploadProgress,
+                            strokeWidth: 2.5,
+                            valueColor: const AlwaysStoppedAnimation<Color>(
+                              Color(0xFF128C7E),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+
+            // Send Button (when has text) OR Mic Button (when no text)
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              transitionBuilder: (child, animation) {
+                return ScaleTransition(scale: animation, child: child);
+              },
+              child: _hasText ? _buildSendButton() : _buildMicButton(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildIconButton({
+    required IconData icon,
+    required VoidCallback onPressed,
+    required Color color,
+    EdgeInsets? padding,
+  }) {
+    return Padding(
+      padding: padding ?? EdgeInsets.zero,
+      child: IconButton(
+        icon: Icon(icon, color: color),
+        onPressed: onPressed,
+        padding: const EdgeInsets.all(8),
+        constraints: const BoxConstraints(),
+      ),
+    );
+  }
+
+  Widget _buildSendButton() {
+    return Material(
+      key: const ValueKey('send'),
+      color: const Color(0xFF128C7E),
+      shape: const CircleBorder(),
+      child: InkWell(
+        onTap: widget.isUploading ? null : widget.onSendMessage,
+        customBorder: const CircleBorder(),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          child: const Icon(Icons.send, color: Colors.white, size: 22),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMicButton() {
+    if (widget.isWeb) {
+      return Material(
+        key: const ValueKey('mic_disabled'),
+        color: Colors.grey.shade300,
+        shape: const CircleBorder(),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          child: Icon(Icons.mic_off, color: Colors.grey.shade600, size: 22),
+        ),
+      );
+    }
+
+    return ScaleTransition(
+      key: const ValueKey('mic'),
+      scale: _micScaleAnimation,
+      child: Material(
+        color: _isRecording ? Colors.red : const Color(0xFF128C7E),
+        shape: const CircleBorder(),
+        child: InkWell(
+          onTapDown: (_) => _handleMicPress(),
+          onTapUp: (_) => _handleMicRelease(),
+          onTapCancel: _handleMicRelease,
+          customBorder: const CircleBorder(),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            child: Icon(
+              _isRecording ? Icons.stop : Icons.mic,
+              color: Colors.white,
+              size: 22,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// ATTACHMENT BOTTOM SHEET
+// ============================================================================
+class AttachmentBottomSheet extends StatelessWidget {
+  final VoidCallback onCameraPressed;
+  final VoidCallback onGalleryPressed;
+  final VoidCallback onDocumentPressed;
+  final VoidCallback onContactPressed;
+  final VoidCallback onLocationPressed;
+
+  const AttachmentBottomSheet({
+    Key? key,
+    required this.onCameraPressed,
+    required this.onGalleryPressed,
+    required this.onDocumentPressed,
+    required this.onContactPressed,
+    required this.onLocationPressed,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle bar
+            Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 20),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+
+            // Grid of attachment options
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _AttachmentOption(
+                        icon: Icons.insert_drive_file,
+                        label: 'Document',
+                        color: const Color(0xFF7F66FF),
+                        onTap: onDocumentPressed,
+                      ),
+                      _AttachmentOption(
+                        icon: Icons.camera_alt,
+                        label: 'Camera',
+                        color: const Color(0xFFEC407A),
+                        onTap: onCameraPressed,
+                      ),
+                      _AttachmentOption(
+                        icon: Icons.photo_library,
+                        label: 'Gallery',
+                        color: const Color(0xFFAB47BC),
+                        onTap: onGalleryPressed,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _AttachmentOption(
+                        icon: Icons.headset,
+                        label: 'Audio',
+                        color: const Color(0xFFFF7043),
+                        onTap: () {
+                          Navigator.pop(context);
+                          // Handle audio - could open audio picker
+                        },
+                      ),
+                      _AttachmentOption(
+                        icon: Icons.location_on,
+                        label: 'Location',
+                        color: const Color(0xFF66BB6A),
+                        onTap: onLocationPressed,
+                      ),
+                      _AttachmentOption(
+                        icon: Icons.person,
+                        label: 'Contact',
+                        color: const Color(0xFF29B6F6),
+                        onTap: onContactPressed,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// ATTACHMENT OPTION BUTTON
+// ============================================================================
+class _AttachmentOption extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _AttachmentOption({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: 90,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              child: Icon(icon, color: Colors.white, size: 26),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey.shade700,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

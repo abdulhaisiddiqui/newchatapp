@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:chatapp/services/story/story_service.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class StoryUploadPage extends StatefulWidget {
   const StoryUploadPage({super.key});
@@ -51,11 +52,41 @@ class _StoryUploadPageState extends State<StoryUploadPage> {
 
   // ✅ Pick image from gallery/camera
   Future<void> _pickImage(ImageSource source) async {
-    final picked = await _picker.pickImage(source: source, imageQuality: 70);
-    if (picked != null) {
-      setState(() {
-        _selectedFile = File(picked.path);
-      });
+    // Request permissions
+    PermissionStatus permissionStatus;
+    if (source == ImageSource.camera) {
+      permissionStatus = await Permission.camera.request();
+    } else {
+      permissionStatus = await Permission.photos.request();
+      if (permissionStatus.isDenied) {
+        // Fallback to storage for older Android
+        permissionStatus = await Permission.storage.request();
+      }
+    }
+
+    if (permissionStatus.isGranted) {
+      final picked = await _picker.pickImage(source: source, imageQuality: 70);
+      if (picked != null) {
+        setState(() {
+          _selectedFile = File(picked.path);
+        });
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              source == ImageSource.camera
+                  ? 'Camera permission is required to take photos'
+                  : 'Gallery permission is required to select photos',
+            ),
+            action: SnackBarAction(
+              label: 'Settings',
+              onPressed: () => openAppSettings(),
+            ),
+          ),
+        );
+      }
     }
   }
 

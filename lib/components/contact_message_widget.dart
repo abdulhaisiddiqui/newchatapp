@@ -2,115 +2,124 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class ContactMessageWidget extends StatelessWidget {
-  final String contactName;
-  final String contactPhone;
+  final String name;
+  final String phone;
+  final String? avatar;
   final bool isCurrentUser;
 
   const ContactMessageWidget({
-    required this.contactName,
-    required this.contactPhone,
+    Key? key,
+    required this.name,
+    required this.phone,
+    this.avatar,
     required this.isCurrentUser,
-  });
+  }) : super(key: key);
 
   Future<void> _callContact() async {
-    final Uri phoneUri = Uri(scheme: 'tel', path: contactPhone);
-    if (await canLaunchUrl(phoneUri)) {
-      await launchUrl(phoneUri);
+    final url = 'tel:$phone';
+    if (await canLaunchUrl(Uri.parse(url))) {
+      await launchUrl(Uri.parse(url));
     }
   }
 
-  Future<void> _messageContact() async {
-    final Uri smsUri = Uri(scheme: 'sms', path: contactPhone);
-    if (await canLaunchUrl(smsUri)) {
-      await launchUrl(smsUri);
+  Future<void> _sendMessage() async {
+    final url = 'sms:$phone';
+    if (await canLaunchUrl(Uri.parse(url))) {
+      await launchUrl(Uri.parse(url));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.all(12),
+      margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+      padding: const EdgeInsets.all(12),
+      constraints: const BoxConstraints(maxWidth: 280),
       decoration: BoxDecoration(
-        color: isCurrentUser ? Colors.teal.shade100 : Colors.grey.shade200,
+        color: isCurrentUser ? Colors.blue : Colors.grey[100],
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isCurrentUser ? Colors.blue[700]! : Colors.grey[300]!,
+          width: 1,
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          // Contact icon and name
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade100,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.person,
-                  color: Colors.blue.shade700,
-                  size: 24,
-                ),
-              ),
-              SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      contactName,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    Text(
-                      contactPhone,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          // Avatar
+          CircleAvatar(
+            radius: 24,
+            backgroundColor: isCurrentUser ? Colors.white : Colors.blue[100],
+            backgroundImage: avatar != null ? NetworkImage(avatar!) : null,
+            child: avatar == null
+                ? Icon(
+                    Icons.person,
+                    color: isCurrentUser ? Colors.blue : Colors.white,
+                    size: 24,
+                  )
+                : null,
           ),
-          SizedBox(height: 12),
 
-          // Action buttons
-          Row(
+          const SizedBox(width: 12),
+
+          // Contact Info
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                    color: isCurrentUser ? Colors.white : Colors.black,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  phone,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: isCurrentUser ? Colors.white70 : Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(width: 8),
+
+          // Action Buttons
+          Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _callContact,
-                  icon: Icon(Icons.call, size: 16),
-                  label: Text('Call'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(vertical: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
+              // Call Button
+              IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                icon: Icon(
+                  Icons.phone,
+                  color: isCurrentUser ? Colors.white : Colors.green,
+                  size: 20,
                 ),
+                onPressed: _callContact,
+                tooltip: 'Call $name',
               ),
-              SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _messageContact,
-                  icon: Icon(Icons.message, size: 16),
-                  label: Text('Message'),
-                  style: OutlinedButton.styleFrom(
-                    padding: EdgeInsets.symmetric(vertical: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
+
+              const SizedBox(height: 4),
+
+              // Message Button
+              IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                icon: Icon(
+                  Icons.message,
+                  color: isCurrentUser ? Colors.white : Colors.blue,
+                  size: 20,
                 ),
+                onPressed: _sendMessage,
+                tooltip: 'Message $name',
               ),
             ],
           ),

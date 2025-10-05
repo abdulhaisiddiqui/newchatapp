@@ -107,6 +107,10 @@ class ChatBubble extends StatelessWidget {
         return _buildTextMessage();
       case MessageType.audio:
         return _buildAudioMessage();
+      case MessageType.location:
+        return _buildLocationMessage();
+      case MessageType.contact:
+        return _buildContactMessage();
       case MessageType.image:
       case MessageType.video:
       case MessageType.document:
@@ -142,26 +146,28 @@ class ChatBubble extends StatelessWidget {
 
   Widget _buildContactMessage() {
     final rawData = (message as dynamic).toMap();
-    final contactName = rawData['contactName'] ?? 'Unknown Contact';
-    final contactPhone = rawData['contactPhone'] ?? 'No phone number';
+    final contactName =
+        rawData['contactName'] ?? rawData['name'] ?? 'Unknown Contact';
+    final contactPhone =
+        rawData['contactPhone'] ?? rawData['phone'] ?? 'No phone number';
+    final avatar = rawData['avatar'];
 
     return ContactMessageWidget(
-      contactName: contactName,
-      contactPhone: contactPhone,
+      name: contactName,
+      phone: contactPhone,
+      avatar: avatar,
       isCurrentUser: isCurrentUser,
     );
   }
 
   Widget _buildLocationMessage() {
     final rawData = (message as dynamic).toMap();
-    final latitude = rawData['latitude'] ?? 0.0;
-    final longitude = rawData['longitude'] ?? 0.0;
-    final mapsUrl = rawData['mapsUrl'];
+    final latitude = rawData['latitude'] ?? rawData['lat'] ?? 0.0;
+    final longitude = rawData['longitude'] ?? rawData['lng'] ?? 0.0;
 
     return LocationMessageWidget(
       latitude: latitude.toDouble(),
       longitude: longitude.toDouble(),
-      mapsUrl: mapsUrl,
       isCurrentUser: isCurrentUser,
     );
   }

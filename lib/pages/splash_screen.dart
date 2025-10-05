@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:chatapp/components/app_logo.dart';
+import 'package:chatapp/services/auth/auth_gate.dart';
 import 'dart:async';
 
 class SplashScreen extends StatefulWidget {
@@ -51,7 +52,9 @@ class _SplashScreenState extends State<SplashScreen>
     // Navigate to AuthGate after animation completes
     Timer(const Duration(seconds: 4), () {
       if (mounted) {
-        Navigator.of(context).pushReplacementNamed('/auth');
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const AuthGate()),
+        );
       }
     });
   }
