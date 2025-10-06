@@ -138,7 +138,7 @@ Future<void> main() async {
                 receiverEmail != null) {
               navigatorKey.currentState?.push(
                 MaterialPageRoute(
-                  builder: (context) => ChatPage(
+                  builder: (context) => ChatPageChatView(
                     receiverUserId: receiverId,
                     receiverUserEmail: receiverEmail,
                   ),
