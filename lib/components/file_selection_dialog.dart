@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:chatapp/services/file/file_security_service.dart';
+import 'package:chatapp/pages/contact_share_page.dart';
+import 'package:chatapp/pages/location_share_page.dart';
 
 class FileSelectionDialog extends StatefulWidget {
   final Function(List<File>) onFilesSelected;
@@ -168,7 +171,7 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
     setState(() => _isLoading = true);
 
     try {
-      // Check permissions - use photos permission for Android 13+, storage for older
+      // Check permissions - use photos permission for both Android and iOS
       List<Permission> permissionsToCheck = [Permission.photos];
       try {
         if (Platform.isAndroid) {
@@ -180,6 +183,7 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
             permissionsToCheck = [Permission.storage];
           }
         }
+        // iOS uses photos permission
       } catch (e) {
         // Platform not available (e.g., during testing), use storage as fallback
         permissionsToCheck = [Permission.storage];
@@ -374,15 +378,80 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
   }
 
   Future<void> _pickContact() async {
-    // For now, show a message that contact sharing is not implemented
-    _showErrorDialog('Contact sharing is not yet implemented in this version.');
+    setState(() => _isLoading = true);
+
+    try {
+      // Check contacts permission for both Android and iOS
+      if (!await _checkPermissions([Permission.contacts])) {
+        _showPermissionDeniedDialog();
+        return;
+      }
+
+      // Navigate to contact share page
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const ContactSharePage()),
+      );
+
+      if (result != null && result is Map<String, dynamic>) {
+        final name = result['name'] as String?;
+        final phone = result['phone'] as String?;
+
+        if (name != null && phone != null) {
+          // Create a temporary file for contact sharing
+          final contactData =
+              'BEGIN:VCARD\nVERSION:3.0\nFN:$name\nTEL:$phone\nEND:VCARD';
+          final tempDir = await getTemporaryDirectory();
+          final contactFile = File('${tempDir.path}/contact_$name.vcf');
+          await contactFile.writeAsString(contactData);
+
+          await _handleSelectedFiles([contactFile]);
+        }
+      }
+    } catch (e) {
+      _showErrorDialog('Failed to select contact: ${e.toString()}');
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _pickLocation() async {
-    // For now, show a message that location sharing is not implemented
-    _showErrorDialog(
-      'Location sharing is not yet implemented in this version.',
-    );
+    setState(() => _isLoading = true);
+
+    try {
+      // Check location permission for both Android and iOS
+      if (!await _checkPermissions([Permission.location])) {
+        _showPermissionDeniedDialog();
+        return;
+      }
+
+      // Navigate to location share page
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const LocationSharePage()),
+      );
+
+      if (result != null && result is Map<String, dynamic>) {
+        final latitude = result['latitude'] as double?;
+        final longitude = result['longitude'] as double?;
+
+        if (latitude != null && longitude != null) {
+          // Create a temporary file for location sharing
+          final locationData = 'Location: $latitude, $longitude';
+          final tempDir = await getTemporaryDirectory();
+          final locationFile = File(
+            '${tempDir.path}/location_${latitude}_${longitude}.txt',
+          );
+          await locationFile.writeAsString(locationData);
+
+          await _handleSelectedFiles([locationFile]);
+        }
+      }
+    } catch (e) {
+      _showErrorDialog('Failed to select location: ${e.toString()}');
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _handleSelectedFiles(List<File> files) async {
@@ -422,7 +491,7 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
       PermissionStatus status = await permission.status;
 
       if (status.isDenied || status.isLimited) {
-        // For Android 13+, some permissions might be limited
+        // Request permission for both Android and iOS
         status = await permission.request();
       }
 

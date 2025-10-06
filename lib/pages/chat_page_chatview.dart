@@ -10,6 +10,7 @@ import 'package:chatview/chatview.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:chatapp/pages/location_share_page.dart';
 import 'package:chatapp/pages/contact_share_page.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -88,16 +89,53 @@ class _ChatPageChatViewState extends State<ChatPageChatView> {
         .first;
 
     final chatViewMessages = messages.map((msg) {
-      // Convert app message to firestore format for CustomMessage parsing
-      final firestoreData = msg.toMap();
-      firestoreData['id'] = msg.timestamp.millisecondsSinceEpoch.toString();
+      // For file messages, create CustomMessage with proper data
+      if (msg.hasFileAttachment && msg.fileAttachment != null) {
+        final fileAttachment = msg.fileAttachment!;
+        CustomMessageType messageType;
 
-      final customMessage = CustomMessage.fromFirestore(
-        firestoreData,
-        currentUser.id == msg.senderId ? currentUser : otherUser,
-      );
+        if (fileAttachment.isImage) {
+          messageType = CustomMessageType.image;
+        } else if (fileAttachment.isVideo) {
+          messageType = CustomMessageType.document; // Videos as documents
+        } else if (fileAttachment.isAudio) {
+          messageType = CustomMessageType.voice;
+        } else {
+          messageType = CustomMessageType.document;
+        }
 
-      return customMessage.toChatViewMessage();
+        final customMessage = CustomMessage(
+          id: msg.timestamp.millisecondsSinceEpoch.toString(),
+          message: messageType == CustomMessageType.image
+              ? 'Sent image: ${fileAttachment.originalFileName}'
+              : msg.message.isNotEmpty
+              ? msg.message
+              : 'Sent file: ${fileAttachment.originalFileName}',
+          sender: currentUser.id == msg.senderId ? currentUser : otherUser,
+          createdAt: msg.timestamp.toDate(),
+          customType: messageType,
+          extraData: {
+            'fileId': fileAttachment.fileId,
+            'fileName': fileAttachment.originalFileName,
+            'fileSize': fileAttachment.fileSizeBytes,
+            'downloadUrl': fileAttachment.downloadUrl,
+            'senderEmail': msg.senderEmail,
+          },
+        );
+
+        return customMessage.toChatViewMessage();
+      } else {
+        // For text messages, use the existing logic
+        final firestoreData = msg.toMap();
+        firestoreData['id'] = msg.timestamp.millisecondsSinceEpoch.toString();
+
+        final customMessage = CustomMessage.fromFirestore(
+          firestoreData,
+          currentUser.id == msg.senderId ? currentUser : otherUser,
+        );
+
+        return customMessage.toChatViewMessage();
+      }
     }).toList();
 
     chatController.loadMoreData(chatViewMessages);
@@ -123,8 +161,7 @@ class _ChatPageChatViewState extends State<ChatPageChatView> {
 
       setState(() => _isRecording = true);
 
-      // Show voice recorder overlay or handle recording
-      // For now, we'll use a simple approach - show a dialog or overlay
+      // Show voice recorder overlay using the actual VoiceRecorder component
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -133,20 +170,14 @@ class _ChatPageChatViewState extends State<ChatPageChatView> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.mic, color: Colors.red, size: 48),
+              const Text('Hold to record, release to stop'),
               const SizedBox(height: 16),
-              const Text('Recording...'),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () {
+              VoiceRecorder(
+                onStop: (audioPath) {
                   Navigator.pop(context);
                   setState(() => _isRecording = false);
-                  // Simulate recording completion with a dummy file path
-                  // In a real implementation, this would come from the VoiceRecorder widget
-                  _handleVoiceRecording('/tmp/dummy_audio.aac');
+                  _handleVoiceRecording(audioPath);
                 },
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                child: const Text('Stop Recording'),
               ),
             ],
           ),
@@ -233,19 +264,20 @@ class _ChatPageChatViewState extends State<ChatPageChatView> {
   }
 
   Future<bool> _checkMicrophonePermission() async {
+    // Web doesn't support microphone permissions
+    if (kIsWeb) return false;
+
     try {
-      if (Platform.isAndroid) {
-        final status = await Permission.microphone.status;
-        if (status.isDenied) {
-          final result = await Permission.microphone.request();
-          return result.isGranted;
-        }
-        return status.isGranted;
+      final status = await Permission.microphone.status;
+      if (status.isDenied) {
+        final result = await Permission.microphone.request();
+        return result.isGranted;
       }
+      return status.isGranted;
     } catch (e) {
       // Platform not available, assume permission granted
+      return true;
     }
-    return true; // iOS handles this differently
   }
 
   @override
@@ -368,43 +400,44 @@ class _ChatPageChatViewState extends State<ChatPageChatView> {
               ],
             ),
           ),
-          // Popup menu for additional options
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              switch (value) {
-                case 'location':
-                  _shareLocation();
-                  break;
-                case 'contact':
-                  _shareContact();
-                  break;
-              }
-            },
-            itemBuilder: (BuildContext context) => [
-              const PopupMenuItem<String>(
-                value: 'location',
-                child: Row(
-                  children: [
-                    Icon(Icons.location_on, color: Colors.green),
-                    SizedBox(width: 8),
-                    Text('Share Location'),
-                  ],
+          // Popup menu for additional options (only on mobile)
+          if (!kIsWeb)
+            PopupMenuButton<String>(
+              onSelected: (value) {
+                switch (value) {
+                  case 'location':
+                    _shareLocation();
+                    break;
+                  case 'contact':
+                    _shareContact();
+                    break;
+                }
+              },
+              itemBuilder: (BuildContext context) => [
+                const PopupMenuItem<String>(
+                  value: 'location',
+                  child: Row(
+                    children: [
+                      Icon(Icons.location_on, color: Colors.green),
+                      SizedBox(width: 8),
+                      Text('Share Location'),
+                    ],
+                  ),
                 ),
-              ),
-              const PopupMenuItem<String>(
-                value: 'contact',
-                child: Row(
-                  children: [
-                    Icon(Icons.person, color: Colors.blue),
-                    SizedBox(width: 8),
-                    Text('Share Contact'),
-                  ],
+                const PopupMenuItem<String>(
+                  value: 'contact',
+                  child: Row(
+                    children: [
+                      Icon(Icons.person, color: Colors.blue),
+                      SizedBox(width: 8),
+                      Text('Share Contact'),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-            icon: const Icon(Icons.more_vert, color: Colors.white),
-            tooltip: 'More options',
-          ),
+              ],
+              icon: const Icon(Icons.more_vert, color: Colors.white),
+              tooltip: 'More options',
+            ),
           IconButton(
             onPressed: () {
               // Add Sentry test button here
@@ -438,59 +471,64 @@ class _ChatPageChatViewState extends State<ChatPageChatView> {
                 ),
               ),
             ),
-            Positioned(
-              bottom: 100, // Above the chat input
-              right: 16,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF128C7E),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.2),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: IconButton(
-                      onPressed: _startVoiceRecording,
-                      icon: Icon(
-                        _isRecording ? Icons.stop : Icons.mic,
-                        color: _isRecording ? Colors.red : Colors.white,
+            // Only show mobile-specific features on mobile platforms
+            if (!kIsWeb)
+              Positioned(
+                bottom: 100, // Above the chat input
+                right: 16,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF128C7E),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.2),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
-                      tooltip: _isRecording
-                          ? 'Stop recording'
-                          : 'Record voice message',
-                      iconSize: 24,
-                    ),
-                  ),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF128C7E),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.2),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
+                      child: IconButton(
+                        onPressed: _startVoiceRecording,
+                        icon: Icon(
+                          _isRecording ? Icons.stop : Icons.mic,
+                          color: _isRecording ? Colors.red : Colors.white,
                         ),
-                      ],
+                        tooltip: _isRecording
+                            ? 'Stop recording'
+                            : 'Record voice message',
+                        iconSize: 24,
+                      ),
                     ),
-                    child: IconButton(
-                      onPressed: _sendFile,
-                      icon: const Icon(Icons.attach_file, color: Colors.white),
-                      tooltip: 'Send files',
-                      iconSize: 24,
+                    Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF128C7E),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.2),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: IconButton(
+                        onPressed: _sendFile,
+                        icon: const Icon(
+                          Icons.attach_file,
+                          color: Colors.white,
+                        ),
+                        tooltip: 'Send files',
+                        iconSize: 24,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -617,38 +655,90 @@ class _ChatPageChatViewState extends State<ChatPageChatView> {
           onFilesSelected: (files) async {
             Navigator.pop(context);
             for (final file in files) {
-              // Upload file first
-              final uploadResult = await _chatService.sendFileMessage(
-                receiverId: widget.receiverUserId,
-                fileAttachment: FileAttachment(
-                  fileId: DateTime.now().millisecondsSinceEpoch.toString(),
-                  fileName: file.path.split('/').last,
-                  originalFileName: file.path.split('/').last,
-                  fileExtension: file.path.split('/').last.split('.').last,
-                  fileSizeBytes: await file.length(),
-                  mimeType:
-                      'application/octet-stream', // You might want to detect proper MIME type
-                  downloadUrl: file.path, // This would be the uploaded URL
-                  uploadedAt: Timestamp.now(),
-                  uploadedBy: currentUser.id,
-                ),
-                textMessage: '',
-              );
+              setState(() {
+                _isUploading = true;
+                _uploadProgress = 0.0;
+                _statusMessage = 'Uploading file...';
+              });
 
-              // Add to chat view
-              final customMessage = CustomMessage(
-                id: DateTime.now().millisecondsSinceEpoch.toString(),
-                message: 'Sent file: ${file.path.split('/').last}',
-                sender: currentUser,
-                createdAt: DateTime.now(),
-                customType: CustomMessageType.document,
-                extraData: {
-                  'fileName': file.path.split('/').last,
-                  'fileSize': await file.length(),
-                },
-              );
+              try {
+                // Upload file to Firebase Storage using FileService
+                final uploadResult = await _fileService.uploadFile(
+                  file: file,
+                  chatRoomId: _getChatRoomId(),
+                  messageId: DateTime.now().millisecondsSinceEpoch.toString(),
+                  onProgress: (progress) {
+                    setState(() => _uploadProgress = progress);
+                  },
+                  onStatusUpdate: (status) {
+                    setState(() => _statusMessage = status);
+                  },
+                );
 
-              chatController.addMessage(customMessage.toChatViewMessage());
+                if (uploadResult.isSuccess && uploadResult.fileId != null) {
+                  // Get the file attachment from Firestore
+                  final fileAttachment = await _fileService.getFileMetadata(
+                    uploadResult.fileId!,
+                  );
+
+                  if (fileAttachment != null) {
+                    // Send file message using ChatService
+                    await _chatService.sendFileMessage(
+                      receiverId: widget.receiverUserId,
+                      fileAttachment: fileAttachment,
+                      textMessage: '',
+                    );
+
+                    // Determine the appropriate custom message type based on file
+                    CustomMessageType messageType;
+                    if (fileAttachment.isImage) {
+                      messageType = CustomMessageType.image;
+                    } else if (fileAttachment.isVideo) {
+                      messageType = CustomMessageType
+                          .document; // Videos as documents for now
+                    } else if (fileAttachment.isAudio) {
+                      messageType = CustomMessageType.voice;
+                    } else {
+                      messageType = CustomMessageType.document;
+                    }
+
+                    // Add to chat view
+                    final customMessage = CustomMessage(
+                      id: DateTime.now().millisecondsSinceEpoch.toString(),
+                      message: messageType == CustomMessageType.image
+                          ? 'Sent image: ${fileAttachment.originalFileName}'
+                          : 'Sent file: ${fileAttachment.originalFileName}',
+                      sender: currentUser,
+                      createdAt: DateTime.now(),
+                      customType: messageType,
+                      extraData: {
+                        'fileId': fileAttachment.fileId,
+                        'fileName': fileAttachment.originalFileName,
+                        'fileSize': fileAttachment.fileSizeBytes,
+                        'downloadUrl': fileAttachment.downloadUrl,
+                      },
+                    );
+
+                    chatController.addMessage(
+                      customMessage.toChatViewMessage(),
+                    );
+                  } else {
+                    _showErrorSnackBar('Failed to get file information');
+                  }
+                } else {
+                  _showErrorSnackBar(
+                    'Failed to upload file: ${uploadResult.error}',
+                  );
+                }
+              } catch (e) {
+                _showErrorSnackBar('Error uploading file: $e');
+              } finally {
+                setState(() {
+                  _isUploading = false;
+                  _uploadProgress = 0.0;
+                  _statusMessage = null;
+                });
+              }
             }
           },
           maxFiles: 5,
@@ -660,35 +750,37 @@ class _ChatPageChatViewState extends State<ChatPageChatView> {
   }
 
   Future<bool> _checkLocationPermission() async {
+    // Web doesn't support location permissions
+    if (kIsWeb) return false;
+
     try {
-      if (Platform.isAndroid) {
-        final status = await Permission.location.status;
-        if (status.isDenied) {
-          final result = await Permission.location.request();
-          return result.isGranted;
-        }
-        return status.isGranted;
+      final status = await Permission.location.status;
+      if (status.isDenied) {
+        final result = await Permission.location.request();
+        return result.isGranted;
       }
+      return status.isGranted;
     } catch (e) {
       // Platform not available, assume permission granted
+      return true;
     }
-    return true; // iOS handles this differently
   }
 
   Future<bool> _checkContactsPermission() async {
+    // Web doesn't support contacts permissions
+    if (kIsWeb) return false;
+
     try {
-      if (Platform.isAndroid) {
-        final status = await Permission.contacts.status;
-        if (status.isDenied) {
-          final result = await Permission.contacts.request();
-          return result.isGranted;
-        }
-        return status.isGranted;
+      final status = await Permission.contacts.status;
+      if (status.isDenied) {
+        final result = await Permission.contacts.request();
+        return result.isGranted;
       }
+      return status.isGranted;
     } catch (e) {
       // Platform not available, assume permission granted
+      return true;
     }
-    return true; // iOS handles this differently
   }
 
   void _showPermissionDeniedDialog(String message) {

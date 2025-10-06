@@ -76,9 +76,16 @@ class CustomMessage {
 
   // Convert to chatview Message
   Message toChatViewMessage() {
+    // For image messages, use the download URL as the message
+    String messageText = message;
+    if (customType == CustomMessageType.image &&
+        extraData?['downloadUrl'] != null) {
+      messageText = extraData!['downloadUrl'];
+    }
+
     return Message(
       id: id,
-      message: message,
+      message: messageText,
       createdAt: createdAt,
       sentBy: sender.id,
       messageType: messageType,
