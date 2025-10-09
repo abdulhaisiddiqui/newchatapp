@@ -1,3 +1,4 @@
+import 'package:chatapp/pages/chat_page.dart';
 import 'package:chatapp/pages/chat_page_chatview.dart';
 import 'package:chatapp/pages/profile_screen.dart';
 import 'package:chatapp/services/chat/chat_service.dart';
@@ -81,8 +82,8 @@ class _ContactScreenState extends State<ContactScreen> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => ChatPageChatView(
-                receiverUserId: '', // Not used for groups yet
+              builder: (context) => ChatPage(
+                receiverUserId: chatRoomId, // Not used for groups yet
                 receiverUserEmail: groupName,
               ),
             ),
@@ -236,25 +237,26 @@ class _ContactScreenState extends State<ContactScreen> {
         child: ListTile(
           onTap: _selectedUsers.isNotEmpty
               ? () {
-                  setState(() {
-                    if (isSelected) {
-                      _selectedUsers.remove(userUid);
-                    } else {
-                      _selectedUsers.add(userUid);
-                    }
-                  });
-                }
+            setState(() {
+              if (isSelected) {
+                _selectedUsers.remove(userUid);
+              } else {
+                _selectedUsers.add(userUid);
+              }
+            });
+          }
               : () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => ChatPageChatView(
-                        receiverUserEmail: userEmail,
-                        receiverUserId: userUid,
-                      ),
-                    ),
-                  );
-                },
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ChatPage(
+                  receiverUserId: userUid,
+                  receiverUserEmail: userEmail ?? '',
+                ),
+              ),
+            );
+          },
+
           title: Text(
             data['username'] as String? ?? userEmail.split('@').first,
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),

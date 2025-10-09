@@ -69,28 +69,45 @@ class ChatService extends ChangeNotifier {
 
   //SEND TEXT MESSAGES (Enhanced)
   Future<void> sendTextMessage(String receiverId, String message) async {
-    //get current user info
-    final currentUser = _firebaseAuth.currentUser;
-    if (currentUser == null) {
-      throw Exception('User not authenticated');
-    }
-    final String currentUserId = currentUser.uid;
-    final String currentUserEmail = currentUser.email ?? 'unknown@example.com';
-    final Timestamp timestamp = Timestamp.now();
+    final currentUser = _firebaseAuth.currentUser!;
+    final chatRoomId = getChatRoomId(currentUser.uid, receiverId);
+    final messageId = DateTime.now().millisecondsSinceEpoch.toString();
 
-    //create a new message
-    app_message.Message newMessage = app_message.Message(
-      senderId: currentUserId,
-      senderEmail: currentUserEmail,
+    // Create a Message object
+    final newMessage = app_message.Message(
+      id: messageId,
+      senderId: currentUser.uid,
+      senderEmail: currentUser.email ?? 'unknown@example.com',
       receiverId: receiverId,
       message: message,
-      timestamp: timestamp,
+      timestamp: Timestamp.now(),
       type: app_message_type.MessageType.text,
-      isRead: false, // New messages are unread by default
+      isRead: false,
+      isEdited: false,
     );
 
-    await _sendMessageToFirestore(newMessage, receiverId);
+    // Save message to Firestore
+    await _firestore
+        .collection('chat_rooms')
+        .doc(chatRoomId)
+        .collection('messages')
+        .doc(messageId)
+        .set(newMessage.toMap());
+
+    // Update chat room metadata
+    await _firestore.collection('chat_rooms').doc(chatRoomId).set({
+      'members': [currentUser.uid, receiverId], // Changed from 'participants' to 'members'
+      'lastMessage': message,
+      'lastMessageTime': FieldValue.serverTimestamp(),
+      'unreadCount': {receiverId: FieldValue.increment(1)},
+      'chatType': 'direct', // Add chat type for clarity
+      'hiddenFor': FieldValue.arrayRemove([currentUser.uid]),
+    }, SetOptions(merge: true));
+
+    // Send notification
+    await _sendNotificationToReceiver(receiverId, message);
   }
+
 
   //SEND CONTACT MESSAGES (Updated for CustomMessage)
   Future<void> sendContactMessage({
@@ -169,7 +186,6 @@ class ChatService extends ChangeNotifier {
     required FileAttachment fileAttachment,
     String? textMessage,
   }) async {
-    //get current user info
     final currentUser = _firebaseAuth.currentUser;
     if (currentUser == null) {
       throw Exception('User not authenticated');
@@ -178,8 +194,8 @@ class ChatService extends ChangeNotifier {
     final String currentUserEmail = currentUser.email ?? 'unknown@example.com';
     final Timestamp timestamp = Timestamp.now();
 
-    //create a new file message
     app_message.Message newMessage = app_message.Message(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
       senderId: currentUserId,
       senderEmail: currentUserEmail,
       receiverId: receiverId,
@@ -187,7 +203,8 @@ class ChatService extends ChangeNotifier {
       timestamp: timestamp,
       type: app_message_type.MessageType.fromMimeType(fileAttachment.mimeType),
       fileAttachment: fileAttachment,
-      isRead: false, // New messages are unread by default
+      isRead: false,
+      isEdited: false,
     );
 
     await _sendMessageToFirestore(newMessage, receiverId);
@@ -201,7 +218,6 @@ class ChatService extends ChangeNotifier {
     app_message_type.MessageType type = app_message_type.MessageType.text,
     FileAttachment? fileAttachment,
   }) async {
-    //get current user info
     final currentUser = _firebaseAuth.currentUser;
     if (currentUser == null) {
       throw Exception('User not authenticated');
@@ -210,17 +226,23 @@ class ChatService extends ChangeNotifier {
     final String currentUserEmail = currentUser.email ?? 'unknown@example.com';
     final Timestamp timestamp = Timestamp.now();
 
-    //create a new reply message
+    // Determine message type
+    final messageType = fileAttachment != null
+        ? app_message_type.MessageType.fromMimeType(fileAttachment.mimeType)
+        : type;
+
     app_message.Message newMessage = app_message.Message(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
       senderId: currentUserId,
       senderEmail: currentUserEmail,
       receiverId: receiverId,
-      message: message,
+      message: message.isNotEmpty ? message : '',
       timestamp: timestamp,
-      type: type,
+      type: messageType,
       fileAttachment: fileAttachment,
+      isRead: false,
       replyToMessageId: replyToMessageId,
-      isRead: false, // New messages are unread by default
+      isEdited: false,
     );
 
     await _sendMessageToFirestore(newMessage, receiverId);
@@ -385,6 +407,7 @@ class ChatService extends ChangeNotifier {
 
     // 2. Create a legacy Message object for metadata update
     final legacyMessage = app_message.Message(
+      id: DateTime.now().millisecondsSinceEpoch.toString(), // ✅ Add this line
       senderId: customMessage.sender.id,
       senderEmail: customMessage.extraData?['senderEmail'] ?? '',
       receiverId: receiverId,
@@ -393,6 +416,7 @@ class ChatService extends ChangeNotifier {
       type: app_message_type.MessageType.text,
       isRead: false,
     );
+
 
     // 3. Update chat room metadata
     await _updateChatRoomMetadata(chatRoomId, legacyMessage);
@@ -534,10 +558,9 @@ class ChatService extends ChangeNotifier {
 
   //GET MESSAGES WITH ENHANCED PARSING
   Stream<List<app_message.Message>> getMessagesStream(
-    String userId,
-    String otherUserId,
-  ) {
-    //construct chat room id from user ids (sorted to ensure it matches the id used when sending messages)
+      String userId,
+      String otherUserId,
+      ) {
     List<String> ids = [userId, otherUserId];
     ids.sort();
     String chatRoomId = ids.join("_");
@@ -549,13 +572,26 @@ class ChatService extends ChangeNotifier {
         .orderBy('timestamp', descending: false)
         .snapshots()
         .map((snapshot) {
-          return snapshot.docs.map((doc) {
-            Map<String, dynamic> docData = doc.data();
-            Map<String, dynamic> data = Map<String, dynamic>.from(docData);
-            data['id'] = doc.id; // Add document ID for editing/deleting
-            return app_message.Message.fromMap(data);
-          }).toList();
-        });
+      return snapshot.docs.map((doc) {
+        Map<String, dynamic> docData = doc.data();
+        Map<String, dynamic> data = Map<String, dynamic>.from(docData);
+        data['id'] = doc.id;
+        // Handle legacy 'text' field
+        if (data['message'] == null && data['text'] != null) {
+          data['message'] = data['text'];
+        }
+        // Ensure required fields have fallbacks
+        data['senderId'] ??= 'unknown';
+        data['senderEmail'] ??= 'unknown@example.com';
+        data['receiverId'] ??= 'unknown';
+        data['message'] ??= '';
+        data['isRead'] ??= false;
+        data['isEdited'] ??= false;
+        data['timestamp'] ??= Timestamp.now();
+        data['type'] ??= app_message_type.MessageType.text.name;
+        return app_message.Message.fromMap(data);
+      }).toList();
+    });
   }
 
   //GET MESSAGES (Legacy - for backward compatibility)

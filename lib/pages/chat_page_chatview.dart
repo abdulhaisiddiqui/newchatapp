@@ -80,66 +80,65 @@ class _ChatPageChatViewState extends State<ChatPageChatView> {
       otherUsers: [otherUser],
     );
 
-    _loadMessages();
   }
 
-  void _loadMessages() async {
-    final messages = await _chatService
-        .getMessagesStream(currentUser.id, otherUser.id)
-        .first;
-
-    final chatViewMessages = messages.map((msg) {
-      // For file messages, create CustomMessage with proper data
-      if (msg.hasFileAttachment && msg.fileAttachment != null) {
-        final fileAttachment = msg.fileAttachment!;
-        CustomMessageType messageType;
-
-        if (fileAttachment.isImage) {
-          messageType = CustomMessageType.image;
-        } else if (fileAttachment.isVideo) {
-          messageType = CustomMessageType.document; // Videos as documents
-        } else if (fileAttachment.isAudio) {
-          messageType = CustomMessageType.voice;
-        } else {
-          messageType = CustomMessageType.document;
-        }
-
-        final customMessage = CustomMessage(
-          id: msg.timestamp.millisecondsSinceEpoch.toString(),
-          message: messageType == CustomMessageType.image
-              ? 'Sent image: ${fileAttachment.originalFileName}'
-              : msg.message.isNotEmpty
-              ? msg.message
-              : 'Sent file: ${fileAttachment.originalFileName}',
-          sender: currentUser.id == msg.senderId ? currentUser : otherUser,
-          createdAt: msg.timestamp.toDate(),
-          customType: messageType,
-          extraData: {
-            'fileId': fileAttachment.fileId,
-            'fileName': fileAttachment.originalFileName,
-            'fileSize': fileAttachment.fileSizeBytes,
-            'downloadUrl': fileAttachment.downloadUrl,
-            'senderEmail': msg.senderEmail,
-          },
-        );
-
-        return customMessage.toChatViewMessage();
-      } else {
-        // For text messages, use the existing logic
-        final firestoreData = msg.toMap();
-        firestoreData['id'] = msg.timestamp.millisecondsSinceEpoch.toString();
-
-        final customMessage = CustomMessage.fromFirestore(
-          firestoreData,
-          currentUser.id == msg.senderId ? currentUser : otherUser,
-        );
-
-        return customMessage.toChatViewMessage();
-      }
-    }).toList();
-
-    chatController.loadMoreData(chatViewMessages);
-  }
+  // void _loadMessages() async {
+  //   final messages = await _chatService
+  //       .getMessagesStream(currentUser.id, otherUser.id)
+  //       .first;
+  //
+  //   final chatViewMessages = messages.map((msg) {
+  //     // For file messages, create CustomMessage with proper data
+  //     if (msg.hasFileAttachment && msg.fileAttachment != null) {
+  //       final fileAttachment = msg.fileAttachment!;
+  //       CustomMessageType messageType;
+  //
+  //       if (fileAttachment.isImage) {
+  //         messageType = CustomMessageType.image;
+  //       } else if (fileAttachment.isVideo) {
+  //         messageType = CustomMessageType.document; // Videos as documents
+  //       } else if (fileAttachment.isAudio) {
+  //         messageType = CustomMessageType.voice;
+  //       } else {
+  //         messageType = CustomMessageType.document;
+  //       }
+  //
+  //       final customMessage = CustomMessage(
+  //         id: msg.timestamp.millisecondsSinceEpoch.toString(),
+  //         message: messageType == CustomMessageType.image
+  //             ? 'Sent image: ${fileAttachment.originalFileName}'
+  //             : msg.message.isNotEmpty
+  //             ? msg.message
+  //             : 'Sent file: ${fileAttachment.originalFileName}',
+  //         sender: currentUser.id == msg.senderId ? currentUser : otherUser,
+  //         createdAt: msg.timestamp.toDate(),
+  //         customType: messageType,
+  //         extraData: {
+  //           'fileId': fileAttachment.fileId,
+  //           'fileName': fileAttachment.originalFileName,
+  //           'fileSize': fileAttachment.fileSizeBytes,
+  //           'downloadUrl': fileAttachment.downloadUrl,
+  //           'senderEmail': msg.senderEmail,
+  //         },
+  //       );
+  //
+  //       return customMessage.toChatViewMessage();
+  //     } else {
+  //       // For text messages, use the existing logic
+  //       final firestoreData = msg.toMap();
+  //       firestoreData['id'] = msg.timestamp.millisecondsSinceEpoch.toString();
+  //
+  //       final customMessage = CustomMessage.fromFirestore(
+  //         firestoreData,
+  //         currentUser.id == msg.senderId ? currentUser : otherUser,
+  //       );
+  //
+  //       return customMessage.toChatViewMessage();
+  //     }
+  //   }).toList();
+  //
+  //   chatController.loadMoreData(chatViewMessages);
+  // }
 
   void _handleVoiceRecording(String audioPath) {
     _onVoiceRecordingComplete(audioPath);

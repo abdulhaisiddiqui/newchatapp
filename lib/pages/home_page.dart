@@ -1,3 +1,5 @@
+import 'package:chatapp/pages/chat_page.dart';
+import 'package:chatapp/pages/create_group_page.dart';
 import 'package:chatapp/pages/story_upload_page.dart';
 import 'package:chatapp/services/auth/auth_service.dart';
 import 'package:chatapp/services/story/story_service.dart';
@@ -5,6 +7,7 @@ import 'package:chatapp/services/user/user_status_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:provider/provider.dart';
 import 'package:material_floating_search_bar_2/material_floating_search_bar_2.dart';
 import 'package:badges/badges.dart' as badges;
@@ -26,6 +29,10 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  bool _isSearchOpen = false;
+  final FloatingSearchBarController _searchBarController = FloatingSearchBarController();
+
+
   final FirebaseAuth _auth = FirebaseAuth.instance;
   static const historyLength = 5;
 
@@ -35,12 +42,25 @@ class _HomePageState extends State<HomePage> {
   List<String> filteredSearchHistory = [];
   List<Map<String, dynamic>> filteredUsers = [];
 
+  Future<void> markStoryAsSeen(String userId, String storyId) async {
+    final currentUid = FirebaseAuth.instance.currentUser!.uid;
+    await FirebaseFirestore.instance
+        .collection('stories')
+        .doc(userId)
+        .collection('userStories')
+        .doc(storyId)
+        .update({
+          'seenBy': FieldValue.arrayUnion([currentUid]),
+        });
+  }
+
   @override
   void initState() {
     super.initState();
     // Start monitoring online presence
     UserStatusService().initializePresenceMonitoring();
   }
+
 
   @override
   void dispose() {
@@ -138,27 +158,25 @@ class _HomePageState extends State<HomePage> {
   }
 
   // Sign user out
-  void signOut() async {
-    // Set user offline before signing out
-    await UserStatusService().setUserOffline();
-
-    // Clear secure storage data
-    await SecureStorageService().clearAuthData();
-
-    final authService = Provider.of<AuthService>(context, listen: false);
-    authService.signOut();
-  }
+  // void signOut() async {
+  //   // Set user offline before signing out
+  //   await UserStatusService().setUserOffline();
+  //
+  //   // Clear secure storage data
+  //   await SecureStorageService().clearAuthData();
+  //
+  //   final authService = Provider.of<AuthService>(context, listen: false);
+  //   authService.signOut();
+  // }
 
   Stream<QuerySnapshot> getChatRooms() {
     final currentUid = _auth.currentUser?.uid;
-    if (currentUid == null) {
-      // return an empty stream to avoid errors when not authenticated
-      return const Stream.empty();
-    }
+    if (currentUid == null) return const Stream.empty();
+
     return FirebaseFirestore.instance
         .collection('chat_rooms')
         .where('members', arrayContains: currentUid)
-        .orderBy('lastActivity', descending: true)
+        // agar kuch docments me lastActivity nahi hai to bhi error na ho
         .snapshots();
   }
 
@@ -179,514 +197,286 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final isPortrait =
-        MediaQuery.of(context).orientation == Orientation.portrait;
-
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0A),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF0A0A0A),
-        elevation: 0,
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(
-                Icons.chat_bubble_outline,
-                color: Colors.white,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 12),
-            const Text(
-              'ChatApp',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 8),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: IconButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ContactScreen()),
-                );
-              },
-              icon: const Icon(Icons.group_add, color: Colors.white),
-              tooltip: 'Create Group',
-            ),
-          ),
-          Container(
-            margin: const EdgeInsets.only(right: 8),
-            padding: const EdgeInsets.all(2),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: const LinearGradient(
-                colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            child: CircleAvatar(
-              backgroundImage: const AssetImage('assets/images/user.png'),
-              radius: 18,
-              backgroundColor: Colors.transparent,
-            ),
-          ),
-          Container(
-            margin: const EdgeInsets.only(right: 16),
-            decoration: BoxDecoration(
-              color: Colors.red.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: IconButton(
-              onPressed: signOut,
-              icon: const Icon(Icons.logout, color: Colors.redAccent),
-              tooltip: 'Sign Out',
-            ),
-          ),
-        ],
-      ),
-      body: FloatingSearchBar(
-        hint: 'Search users and groups...',
-        hintStyle: const TextStyle(color: Colors.grey),
-        queryStyle: const TextStyle(color: Colors.white),
-        backgroundColor: const Color(0xFF1A1A1A),
-        backdropColor: Colors.black.withOpacity(0.5),
-        scrollPadding: const EdgeInsets.only(top: 16, bottom: 80),
-        transitionDuration: const Duration(milliseconds: 600),
-        transitionCurve: Curves.easeInOut,
-        physics: const BouncingScrollPhysics(),
-        axisAlignment: isPortrait ? 0.0 : -1.0,
-        openAxisAlignment: 0.0,
-        width: isPortrait ? 600 : 500,
-        debounceDelay: const Duration(milliseconds: 500),
-        onQueryChanged: (query) {
-          setState(() {
-            filteredSearchHistory = filterSearchTerms(filter: query);
-          });
-        },
-        onSubmitted: (query) async {
-          setState(() {
-            addSearchTerm(query);
-            selectedTerm = query;
-          });
+      backgroundColor: Color(0XFF000E08),
+      body: Stack(
+        children: [
+          Column(
+            children: [
+              const SizedBox(height: 40), // status bar ke liye space
+              // 🔹 Custom Header (AppBar movedinside body)
+              SizedBox(
+                height: 56,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // 🔍 Search Button
+                      IconButton(
+                        icon: const Icon(Icons.search, color: Colors.white),
+                        onPressed: () {
+                          setState(() {
+                            _isSearchOpen = !_isSearchOpen;
+                          });
 
-          // Search for users
-          final users = await searchUsers(query);
-          setState(() {
-            addFilteredUsers(users);
-          });
-        },
-        transition: CircularFloatingSearchBarTransition(),
-        actions: [
-          FloatingSearchBarAction(
-            showIfOpened: false,
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(Icons.search, color: Colors.white, size: 20),
-            ),
-          ),
-          FloatingSearchBarAction.searchToClear(showIfClosed: false),
-        ],
-        builder: (context, transition) {
-          return ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: Material(
-              color: const Color(0xFF1A1A1A),
-              elevation: 8.0,
-              shadowColor: Colors.black.withOpacity(0.3),
-              child: Builder(
-                builder: (context) {
-                  if (filteredUsers.isEmpty && selectedTerm.isEmpty) {
-                    return Container(
-                      height: 56,
-                      width: double.infinity,
-                      alignment: Alignment.center,
-                      child: Text(
-                        'Start typing to search users...',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.grey,
-                          fontSize: 14,
-                        ),
-                      ),
-                    );
-                  }
-
-                  if (filteredUsers.isEmpty && selectedTerm.isNotEmpty) {
-                    return Container(
-                      height: 56,
-                      width: double.infinity,
-                      alignment: Alignment.center,
-                      child: Text(
-                        'No users found for "$selectedTerm"',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.grey,
-                          fontSize: 14,
-                        ),
-                      ),
-                    );
-                  }
-
-                  return Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: filteredUsers
-                        .map(
-                          (user) => Container(
-                            height: 72,
-                            width: double.infinity,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              border: Border(
-                                bottom: BorderSide(
-                                  color: Colors.grey.withOpacity(0.1),
-                                  width: 0.5,
-                                ),
-                              ),
-                            ),
-                            child: ListTile(
-                              leading: Container(
-                                padding: const EdgeInsets.all(2),
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  gradient: const LinearGradient(
-                                    colors: [
-                                      Color(0xFF667EEA),
-                                      Color(0xFF764BA2),
-                                    ],
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                  ),
-                                ),
-                                child: CircleAvatar(
-                                  backgroundColor: const Color(0xFF1A1A1A),
-                                  radius: 18,
-                                  child: ClipOval(
-                                    child: user['profilePic'] != null
-                                        ? CachedNetworkImage(
-                                            imageUrl: user['profilePic'],
-                                            fit: BoxFit.cover,
-                                            width: 32,
-                                            height: 32,
-                                            placeholder: (context, url) =>
-                                                const CircularProgressIndicator(
-                                                  strokeWidth: 2,
-                                                  color: Colors.white,
-                                                ),
-                                            errorWidget:
-                                                (context, url, error) =>
-                                                    const Icon(
-                                                      Icons.person,
-                                                      size: 16,
-                                                      color: Colors.white,
-                                                    ),
-                                          )
-                                        : Image.asset(
-                                            'assets/images/user.png',
-                                            width: 32,
-                                            height: 32,
-                                          ),
-                                  ),
-                                ),
-                              ),
-                              title: Text(
-                                user['username'] ??
-                                    user['email']?.split('@').first ??
-                                    'User',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              subtitle: Text(
-                                user['email'] ?? '',
-                                style: TextStyle(
-                                  color: Colors.grey.shade400,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              onTap: () {
-                                // Start chat with this user
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => ChatPageChatView(
-                                      receiverUserId: user['id'],
-                                      receiverUserEmail: user['email'] ?? '',
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  );
-                },
-              ),
-            ),
-          );
-        },
-        body: Column(
-          children: [
-            // 👇 Stories Section
-            Padding(
-              padding: const EdgeInsets.only(top: 50),
-              child: Container(
-                height: 110,
-                padding: const EdgeInsets.symmetric(
-                  vertical: 10,
-                  horizontal: 10,
-                ),
-                child: Row(
-                  children: [
-                    // --- My Status Button ---
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => StoryUploadPage(),
-                          ),
-                        );
-                      },
-                      child: storyAvatar(
-                        'My Status',
-                        'assets/images/user.png',
-                        showOverlay: true,
-                      ),
-                    ),
-
-                    // --- Other Users Stories from Firestore ---
-                    Expanded(
-                      child: StreamBuilder<List<Map<String, dynamic>>>(
-                        stream: StoryService().getVisibleStories(
-                          _auth.currentUser!.uid,
-                        ),
-                        builder: (context, snapshot) {
-                          if (snapshot.connectionState ==
-                              ConnectionState.waiting) {
-                            return const CircularProgressIndicator();
+                          // Open / close via controller
+                          if (_isSearchOpen) {
+                            _searchBarController.open();
+                          } else {
+                            _searchBarController.close();
                           }
-
-                          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                            return const Text(
-                              "No statuses from your chats",
-                              style: TextStyle(color: Colors.grey),
-                            );
-                          }
-
-                          final stories = snapshot.data!;
-
-                          return SizedBox(
-                            height: 90,
-                            child: ListView.builder(
-                              scrollDirection: Axis.horizontal,
-                              itemCount: stories.length,
-                              itemBuilder: (context, index) {
-                                final userStory =
-                                    stories[index]; // ek user ka full bundle
-                                final username =
-                                    userStory["username"] ?? "User";
-
-                                // user ke subcollection ka sabse naya story
-                                final List<dynamic> userStories =
-                                    userStory["stories"];
-                                final latest =
-                                    userStories.first; // already orderBy(desc)
-
-                                return GestureDetector(
-                                  onTap: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => StoryViewerPage(
-                                          userData: userStory,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                  child: Column(
-                                    children: [
-                                      CircleAvatar(
-                                        radius: 30,
-                                        backgroundColor: Colors.grey[300],
-                                        child: ClipOval(
-                                          child: latest["type"] == "image"
-                                              ? CachedNetworkImage(
-                                                  imageUrl: latest["url"],
-                                                  fit: BoxFit.cover,
-                                                  width: 60,
-                                                  height: 60,
-                                                  placeholder: (context, url) =>
-                                                      const CircularProgressIndicator(
-                                                        strokeWidth: 2,
-                                                      ),
-                                                  errorWidget:
-                                                      (context, url, error) =>
-                                                          const Icon(
-                                                            Icons.image,
-                                                            size: 30,
-                                                          ),
-                                                )
-                                              : latest["type"] == "text"
-                                              ? Container(
-                                                  width: 60,
-                                                  height: 60,
-                                                  alignment: Alignment.center,
-                                                  decoration: BoxDecoration(
-                                                    gradient: LinearGradient(
-                                                      colors: [
-                                                        Colors.blue,
-                                                        Colors.purple,
-                                                      ],
-                                                      begin: Alignment.topLeft,
-                                                      end:
-                                                          Alignment.bottomRight,
-                                                    ),
-                                                  ),
-                                                  child: Text(
-                                                    latest["text"] ?? "",
-                                                    style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 12,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                    ),
-                                                    textAlign: TextAlign.center,
-                                                    maxLines: 2,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                  ),
-                                                )
-                                              : const Icon(
-                                                  Icons.person,
-                                                  size: 30,
-                                                ),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 5),
-                                      Text(
-                                        username,
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-                          );
                         },
                       ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
 
-            // 👇 Firestore Chat List
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 30),
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF1A1A1A), Color(0xFF2A2A2A)],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                    ),
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(40),
-                      topRight: Radius.circular(40),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.3),
-                        blurRadius: 20,
-                        offset: const Offset(0, -5),
+
+                      // 🏠 Title
+                      const Text(
+                        'Home',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+
+                      // 👤 Profile + Logout Row
+                      Row(
+                        children: [
+                          FutureBuilder<DocumentSnapshot>(
+                            future: FirebaseFirestore.instance
+                                .collection('users')
+                                .doc(FirebaseAuth.instance.currentUser!.uid)
+                                .get(),
+                            builder: (context, snapshot) {
+                              if (snapshot.connectionState ==
+                                  ConnectionState.waiting) {
+                                return const CircleAvatar(
+                                  radius: 20,
+                                  backgroundColor: Colors.grey,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                );
+                              }
+
+                              if (snapshot.hasError ||
+                                  !snapshot.hasData ||
+                                  !snapshot.data!.exists) {
+                                return const CircleAvatar(
+                                  radius: 20,
+                                  backgroundImage: AssetImage(
+                                    'assets/images/user.png',
+                                  ),
+                                );
+                              }
+
+                              final userData =
+                                  snapshot.data!.data() as Map<String, dynamic>;
+                              final imageUrl = userData['profilePic'] ?? '';
+
+                              return CircleAvatar(
+                                radius: 20,
+                                backgroundImage: imageUrl.isNotEmpty
+                                    ? NetworkImage(imageUrl)
+                                    : const AssetImage('assets/images/user.png')
+                                          as ImageProvider,
+                              );
+                            },
+                          ),
+                          // const SizedBox(width: 10),
+                          // IconButton(
+                          //   onPressed: signOut,
+                          //   icon: const Icon(Icons.logout, color: Colors.white),
+                          // ),
+                        ],
                       ),
                     ],
                   ),
-                  child: _buildChatList(),
                 ),
               ),
+
+              // 👇 Stories Section
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Container(
+                  height: 110,
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 10,
+                    horizontal: 10,
+                  ),
+                  child: StreamBuilder<List<Map<String, dynamic>>>(
+                    stream: StoryService().getVisibleStories(
+                      _auth.currentUser!.uid,
+                    ),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+
+                      List<Map<String, dynamic>> stories = [];
+                      if (snapshot.hasData) {
+                        stories = snapshot.data!;
+                        // Sort unseen first
+                        stories.sort((a, b) {
+                          final aSeen = a["isSeen"] ?? false;
+                          final bSeen = b["isSeen"] ?? false;
+                          return aSeen == bSeen ? 0 : (aSeen ? 1 : -1);
+                        });
+                      }
+
+                      final allStories = [
+                        {"username": "My Status", "isMyStatus": true},
+                        ...stories,
+                      ];
+
+                      return ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: allStories.length,
+                        itemBuilder: (context, index) {
+                          final story = allStories[index];
+                          final isMyStatus = story["isMyStatus"] == true;
+
+                          if (isMyStatus) {
+                            return const MyStatusWidget();
+                          } else {
+                            final username = story["username"] ?? "User";
+                            final List<dynamic> userStories = story["stories"];
+                            final latest = userStories.first;
+                            final bool isSeen = story["isSeen"] ?? false;
+
+                            return GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        StoryViewerPage(userData: story),
+                                  ),
+                                ).then((_) async {
+                                  for (var s in userStories) {
+                                    await StoryService().markStoryAsViewed(
+                                      story["userId"],
+                                      s["storyId"],
+                                    );
+                                  }
+                                });
+                              },
+                              child: storyAvatar(
+                                username,
+                                'assets/images/user.png',
+                                isSeen: isSeen,
+                                imageUrl: latest["type"] == "image"
+                                    ? latest["url"]
+                                    : null,
+                              ),
+                            );
+                          }
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ),
+
+              // 👇 Firestore Chat List
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(40),
+                        topRight: Radius.circular(40),
+                      ),
+                    ),
+                    child: _buildChatList(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          // 👇 Search bar overlay
+          if (_isSearchOpen)
+            Positioned(
+              top: 56, // AppBar ke neeche
+              left: 0,
+              right: 0,
+              child:
+              FloatingSearchBar(
+                controller: _searchBarController,
+                width: MediaQuery.of(context).size.width, // screen width
+                axisAlignment: 0.0,
+                openAxisAlignment: 0.0,
+                debounceDelay: const Duration(milliseconds: 300),
+                hint: 'Search users and groups...',
+                builder: (context, transition) {
+                  return Container(
+                    height: 200,
+                    color: const Color(0xFF1A1A1A),
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: filteredUsers.length,
+                      itemBuilder: (context, index) {
+                        final user = filteredUsers[index] as Map<String, dynamic>;
+                        return ListTile(
+                          leading: CircleAvatar(
+                            backgroundImage: (user['profilePic'] ?? '').isNotEmpty
+                                ? NetworkImage(user['profilePic'])
+                                : const AssetImage('assets/images/user.png') as ImageProvider,
+                          ),
+                          title: Text(user['username'] ?? '', style: const TextStyle(color: Colors.white)),
+                        );
+                      },
+                    ),
+                  );
+                },
+              )
+
             ),
-          ],
-        ),
+
+        ],
+
+      ),
+      floatingActionButton: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          FloatingActionButton(
+            heroTag: 'new_chat', // Unique tag to avoid Hero animation conflicts
+            backgroundColor: const Color(0xFF128C7E),
+            onPressed: () {
+              // Action for starting a new chat
+              Navigator.push(context, MaterialPageRoute(builder: (context)=>ContactScreen()));
+            },
+            child: const Icon(Icons.chat, color: Colors.white),
+            tooltip: 'New Chat',
+          ),
+          const SizedBox(height: 16), // Spacing between FABs
+          FloatingActionButton(
+            heroTag: 'new_group', // Unique tag for second FAB
+            backgroundColor: const Color(0xFF25D366),
+            onPressed: () {
+              // Action for creating a group chat or another feature
+              Navigator.push(context, MaterialPageRoute(builder: (context)=>CreateGroupPage()));
+            },
+            child: const Icon(Icons.group_add, color: Colors.white),
+            tooltip: 'New Group',
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildChatList() {
-    // Use StreamBuilder on chat_rooms (only chats where current user is a member)
+    final currentUid = _auth.currentUser?.uid ?? '';
+
     return StreamBuilder<QuerySnapshot>(
       stream: getChatRooms(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          // show the real error so you can debug (index/auth/permission errors)
-          final err = snapshot.error.toString();
-          debugPrint('Firestore chat_rooms error: $err');
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error, color: Colors.red, size: 48),
-                const SizedBox(height: 16),
-                Text(
-                  'Error loading chats:\n$err',
-                  style: const TextStyle(color: Colors.white),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                ElevatedButton(
-                  onPressed: () => setState(() {}),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF667EEA),
-                    foregroundColor: Colors.white,
-                  ),
-                  child: const Text('Retry'),
-                ),
-              ],
-            ),
-          );
+          return Center(child: Text('Error loading chats: ${snapshot.error}'));
         }
 
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -694,25 +484,55 @@ class _HomePageState extends State<HomePage> {
         }
 
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(
-            child: Text(
-              'No chats yet',
-              style: TextStyle(color: Colors.grey, fontSize: 16),
-            ),
-          );
+          return const Center(child: Text('No chats yet'));
         }
 
-        final docs = snapshot.data!.docs;
+        // 🔹 Filter out hidden chats
+        final docs = snapshot.data!.docs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>? ?? {};
+          final hiddenFor = List<String>.from(data['hiddenFor'] ?? []);
+          return !hiddenFor.contains(currentUid);
+        }).toList();
+
+        if (docs.isEmpty) {
+          return const Center(child: Text('No visible chats'));
+        }
 
         return ListView.builder(
           padding: const EdgeInsets.only(top: 20),
           itemCount: docs.length,
           itemBuilder: (context, index) {
             final chatRoom = docs[index];
-            // defensive extraction of data
             final raw = chatRoom.data() as Map<String, dynamic>? ?? {};
 
-            // members may be List<dynamic>, convert safely to List<String>
+            final isGroup = raw['isGroup'] == true;
+            if (isGroup) {
+              final groupName = raw['name'] ?? 'Unnamed Group';
+              final description = raw['description'] ?? '';
+
+              return ListTile(
+                leading: const CircleAvatar(child: Icon(Icons.group)),
+                title: Text(groupName),
+                subtitle: Text(
+                  description,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => GroupChatPage(
+                        groupId: chatRoom.id,
+                        groupName: groupName,
+                        description: description,
+                      ),
+                    ),
+                  );
+                },
+              );
+            }
+
             List<String> members = [];
             if (raw['members'] != null && raw['members'] is List) {
               members = (raw['members'] as List)
@@ -720,302 +540,231 @@ class _HomePageState extends State<HomePage> {
                   .toList();
             }
 
-            // Check if this is a group chat
-            final chatType = raw['chatType'] as String? ?? 'direct';
-            final isGroupChat = chatType == 'group';
-            final groupName = raw['groupName'] as String?;
-            final groupAvatar = raw['groupAvatar'] as String?;
-
-            // find other user id (for direct chats only)
-            final currentUid = _auth.currentUser?.uid ?? '';
-            String otherUserId = '';
-            if (!isGroupChat && members.length >= 2) {
+            String otherUserId;
+            if (members.isEmpty) {
+              otherUserId = '';
+            } else if (members.length == 1) {
+              otherUserId = members.first;
+            } else {
               otherUserId = members.firstWhere(
                 (id) => id != currentUid,
                 orElse: () => members.first,
               );
             }
 
-            // extract lastMessage safely (it may be Map or String)
             String lastMessageText = _extractLastMessageText(
               raw['lastMessage'],
             );
 
-            // Get unread count from chat room document
-            final unreadCountMap =
-                raw['unreadCount'] as Map<String, dynamic>? ?? {};
-            final currentUserId = _auth.currentUser?.uid ?? '';
-            final unreadCount = (unreadCountMap[currentUserId] as int?) ?? 0;
-
-            // Handle group chats vs direct chats
-            if (isGroupChat) {
-              // Group chat display
-              final displayName = groupName ?? 'Group Chat';
-              final displayAvatar = groupAvatar ?? '';
-              final memberCount = members.length;
-
-              return Padding(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 10.0,
-                  horizontal: 16,
-                ),
-                child: ListTile(
-                  leading: badges.Badge(
-                    showBadge: unreadCount > 0,
-                    badgeContent: Text(
-                      unreadCount > 99 ? '99+' : unreadCount.toString(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    badgeStyle: const badges.BadgeStyle(
-                      badgeColor: Colors.red,
-                      padding: EdgeInsets.all(6),
-                    ),
-                    position: badges.BadgePosition.topEnd(top: -8, end: -8),
-                    child: CircleAvatar(
-                      backgroundColor: Colors.grey[300],
-                      radius: 24,
-                      child: displayAvatar.isNotEmpty
-                          ? ClipOval(
-                              child: CachedNetworkImage(
-                                imageUrl: displayAvatar,
-                                fit: BoxFit.cover,
-                                width: 48,
-                                height: 48,
-                                placeholder: (context, url) =>
-                                    const CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                errorWidget: (context, url, error) =>
-                                    const Icon(Icons.group, size: 24),
-                              ),
-                            )
-                          : const Icon(Icons.group, size: 24),
-                    ),
-                  ),
-                  title: Text(
-                    displayName,
-                    style: TextStyle(
-                      fontWeight: unreadCount > 0
-                          ? FontWeight.bold
-                          : FontWeight.normal,
-                      fontSize: 16,
-                      color: Colors.white,
-                    ),
-                  ),
-                  subtitle: Text(
-                    '$memberCount members • $lastMessageText',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontWeight: unreadCount > 0
-                          ? FontWeight.w500
-                          : FontWeight.normal,
-                      color: unreadCount > 0 ? Colors.white : Colors.grey[400],
-                    ),
-                  ),
-                  onTap: () async {
-                    // Mark messages as read when opening chat
-                    if (unreadCount > 0) {
-                      await ChatService().markMessagesAsRead(
-                        chatRoom.id,
-                        _auth.currentUser!.uid,
-                      );
-                    }
-
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => GroupChatPage(
-                          groupId: chatRoom.id,
-                          groupName: displayName,
-                          memberIds: members,
-                          groupImage: displayAvatar,
-                        ),
-                      ),
-                    );
-                  },
-                ),
+            if (otherUserId.isEmpty) {
+              return ListTile(
+                leading: const CircleAvatar(child: Icon(Icons.person)),
+                title: const Text('Unknown'),
+                subtitle: Text(lastMessageText),
               );
-            } else {
-              // Direct chat display (existing logic)
-              if (otherUserId.isEmpty) {
-                return ListTile(
-                  leading: const CircleAvatar(child: Icon(Icons.person)),
-                  title: const Text(
-                    'Unknown',
-                    style: TextStyle(color: Colors.white),
+            }
+
+            return FutureBuilder<DocumentSnapshot>(
+              future: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(otherUserId)
+                  .get(),
+              builder: (context, userSnapshot) {
+                if (userSnapshot.hasError) {
+                  return ListTile(
+                    leading: const CircleAvatar(child: Icon(Icons.person)),
+                    title: const Text('User error'),
+                    subtitle: Text(lastMessageText),
+                  );
+                }
+
+                if (userSnapshot.connectionState == ConnectionState.waiting) {
+                  return const ListTile(
+                    leading: CircleAvatar(child: Icon(Icons.person)),
+                    title: Text('Loading...'),
+                  );
+                }
+
+                if (!userSnapshot.hasData || !userSnapshot.data!.exists) {
+                  return ListTile(
+                    leading: const CircleAvatar(child: Icon(Icons.person)),
+                    title: Text(otherUserId),
+                    subtitle: Text(lastMessageText),
+                  );
+                }
+
+                final userData =
+                    userSnapshot.data!.data() as Map<String, dynamic>? ?? {};
+                final String username =
+                    (userData['username'] ??
+                            userData['email']?.split('@')?.first ??
+                            'User')
+                        .toString();
+                final String email = (userData['email'] ?? '').toString();
+                final String profilePic = (userData['profilePic'] ?? '')
+                    .toString();
+
+                return Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 10.0,
+                    horizontal: 16,
                   ),
-                  subtitle: Text(
-                    lastMessageText,
-                    style: const TextStyle(color: Colors.grey),
-                  ),
-                );
-              }
-
-              return FutureBuilder<Map<String, dynamic>>(
-                future: _getUserData(otherUserId),
-                builder: (context, userSnapshot) {
-                  if (userSnapshot.hasError) {
-                    debugPrint(
-                      'Error fetching data for $otherUserId: ${userSnapshot.error}',
-                    );
-                    return ListTile(
-                      leading: const CircleAvatar(child: Icon(Icons.person)),
-                      title: const Text(
-                        'Error loading',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                      subtitle: Text(
-                        lastMessageText,
-                        style: const TextStyle(color: Colors.grey),
-                      ),
-                    );
-                  }
-
-                  if (userSnapshot.connectionState == ConnectionState.waiting) {
-                    return ListTile(
-                      leading: const CircleAvatar(child: Icon(Icons.person)),
-                      title: const Text('Loading...'),
-                      subtitle: Text(lastMessageText),
-                    );
-                  }
-
-                  if (!userSnapshot.hasData) {
-                    return ListTile(
-                      leading: const CircleAvatar(child: Icon(Icons.person)),
-                      title: Text(
-                        otherUserId,
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                      subtitle: Text(
-                        lastMessageText,
-                        style: const TextStyle(color: Colors.grey),
-                      ),
-                    );
-                  }
-
-                  final userData = userSnapshot.data!;
-                  final username =
-                      (userData['username'] ??
-                              userData['email']?.split('@')?.first ??
-                              'User')
-                          .toString();
-                  final email = (userData['email'] ?? '').toString();
-                  final profilePic = (userData['profilePic'] ?? '').toString();
-
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 10.0,
-                      horizontal: 16,
-                    ),
-                    child: ListTile(
-                      leading: badges.Badge(
-                        showBadge: unreadCount > 0,
-                        badgeContent: Text(
-                          unreadCount > 99 ? '99+' : unreadCount.toString(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        badgeStyle: const badges.BadgeStyle(
-                          badgeColor: Colors.red,
-                          padding: EdgeInsets.all(6),
-                        ),
-                        position: badges.BadgePosition.topEnd(top: -8, end: -8),
-                        child: CircleAvatar(
-                          backgroundColor: Colors.grey[300],
-                          radius: 24,
-                          child: Stack(
+                  child: Slidable(
+                    key: ValueKey(userData['uid'] ?? otherUserId),
+                    endActionPane: ActionPane(
+                      motion: const ScrollMotion(),
+                      children: [
+                        CustomSlidableAction(
+                          flex: 1,
+                          onPressed: (context) async {
+                            // 🔔 Notification button
+                            debugPrint('🔔 Notification pressed for $username');
+                          },
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              ClipOval(
-                                child: profilePic.isNotEmpty
-                                    ? CachedNetworkImage(
-                                        imageUrl: profilePic,
-                                        fit: BoxFit.cover,
-                                        width: 48,
-                                        height: 48,
-                                        placeholder: (context, url) =>
-                                            const CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                            ),
-                                        errorWidget: (context, url, error) =>
-                                            Image.asset(
-                                              'assets/images/user.png',
-                                              width: 48,
-                                              height: 48,
-                                            ),
-                                      )
-                                    : Image.asset(
-                                        'assets/images/user.png',
-                                        width: 48,
-                                        height: 48,
-                                      ),
+                              Container(
+                                width: 30,
+                                height: 30,
+                                decoration: const BoxDecoration(
+                                  color: Colors.black,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.notifications,
+                                  color: Colors.white,
+                                  size: 18,
+                                ),
                               ),
-                              Align(
-                                alignment: Alignment.bottomRight,
-                                child: UserStatusIndicator(
-                                  userId: otherUserId,
-                                  showText: false,
-                                  size: 12,
+                              const SizedBox(width: 20),
+                              // 🗑️ DELETE (Hide chat)
+                              GestureDetector(
+                                onTap: () async {
+                                  try {
+                                    await FirebaseFirestore.instance
+                                        .collection('chat_rooms')
+                                        .doc(chatRoom.id)
+                                        .update({
+                                          'hiddenFor': FieldValue.arrayUnion([
+                                            currentUid,
+                                          ]),
+                                        });
+                                    debugPrint(
+                                      '🗑️ Chat hidden for user $currentUid',
+                                    );
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          'Chat with $username removed from home',
+                                        ),
+                                      ),
+                                    );
+                                  } catch (e) {
+                                    debugPrint('❌ Error hiding chat: $e');
+                                  }
+                                },
+                                child: Container(
+                                  width: 30,
+                                  height: 30,
+                                  decoration: const BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.delete,
+                                    color: Colors.white,
+                                    size: 18,
+                                  ),
                                 ),
                               ),
                             ],
                           ),
                         ),
-                      ),
-                      title: Text(
-                        username,
-                        style: TextStyle(
-                          fontWeight: unreadCount > 0
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                          fontSize: 16,
-                          color: Colors.white,
-                        ),
-                      ),
-                      subtitle: Text(
-                        lastMessageText,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontWeight: unreadCount > 0
-                              ? FontWeight.w500
-                              : FontWeight.normal,
-                          color: unreadCount > 0
-                              ? Colors.white
-                              : Colors.grey[400],
-                        ),
-                      ),
-                      onTap: () async {
-                        // Mark messages as read when opening chat
-                        if (unreadCount > 0) {
-                          await ChatService().markMessagesAsRead(
-                            chatRoom.id,
-                            _auth.currentUser!.uid,
-                          );
-                        }
+                      ],
+                    ),
+                    child: ListTile(
+                      onTap: () {
+                        FirebaseFirestore.instance
+                            .collection('chat_rooms')
+                            .doc(chatRoom.id)
+                            .update({'unreadCount.$currentUid': 0});
 
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => ChatPageChatView(
-                              receiverUserId: otherUserId,
+                            builder: (context) => ChatPage(
                               receiverUserEmail: email,
+                              receiverUserId: otherUserId,
                             ),
                           ),
                         );
                       },
+                      leading: Stack(
+                        children: [
+                          CircleAvatar(
+                            backgroundImage: profilePic.isNotEmpty
+                                ? NetworkImage(profilePic)
+                                : const AssetImage('assets/images/user.png')
+                                      as ImageProvider,
+                            radius: 25,
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: UserStatusIndicator(
+                              userId: otherUserId,
+                              showText: false,
+                              size: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                      title: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              username,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (raw['unreadCount'] != null &&
+                              raw['unreadCount'][currentUid] != null &&
+                              raw['unreadCount'][currentUid] > 0)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                raw['unreadCount'][currentUid].toString(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      subtitle: Text(
+                        lastMessageText,
+                        style: const TextStyle(fontSize: 12),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  );
-                },
-              );
-            }
+                  ),
+                );
+              },
+            );
           },
         );
       },
@@ -1044,51 +793,133 @@ class _HomePageState extends State<HomePage> {
       return '';
     }
   }
+}
 
-  /// --- Story Avatar Widget (unchanged) ---
-  Widget storyAvatar(
-    String name,
-    String imagePath, {
-    Color bgColor = Colors.grey,
-    bool showOverlay = false,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-      child: Column(
-        children: [
-          Stack(
-            children: [
-              CircleAvatar(
-                backgroundColor: bgColor,
-                radius: 30,
-                child: CircleAvatar(
-                  backgroundImage: AssetImage(imagePath),
-                  radius: 27,
-                  backgroundColor: Colors.transparent,
-                ),
-              ),
-              if (showOverlay)
-                Positioned(
-                  top: 40,
-                  right: 0,
-                  child: CircleAvatar(
-                    radius: 10,
-                    backgroundColor: Colors.white,
-                    child: const Icon(Icons.add, color: Colors.black, size: 14),
+/// --- Story Avatar Widget ---
+Widget storyAvatar(
+  String name,
+  String imagePath, {
+  Color bgColor = Colors.grey,
+  bool showOverlay = false,
+  bool isSeen = false,
+  bool showBorder = true,
+  String? imageUrl,
+}) {
+  return Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+    child: Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(2.5),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: showBorder
+                ? (isSeen
+                      ? const LinearGradient(colors: [Colors.grey, Colors.grey])
+                      : const LinearGradient(
+                          colors: [Color(0XFF24786D), Color(0XFF24786D)],
+                        ))
+                : const LinearGradient(
+                    colors: [Colors.transparent, Colors.transparent],
                   ),
-                ),
-            ],
           ),
-          const SizedBox(height: 5),
-          Flexible(
-            child: Text(
-              name,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white, fontSize: 14),
-              overflow: TextOverflow.ellipsis,
-            ),
+          child: CircleAvatar(
+            radius: 30,
+            backgroundColor: Colors.black,
+            backgroundImage: (imageUrl != null && imageUrl.isNotEmpty)
+                ? NetworkImage(imageUrl)
+                : AssetImage(imagePath) as ImageProvider,
+            child: showOverlay
+                ? const Align(
+                    alignment: Alignment.bottomRight,
+                    child: CircleAvatar(
+                      radius: 10,
+                      backgroundColor: Colors.white,
+                      child: Icon(Icons.add, color: Colors.black, size: 14),
+                    ),
+                  )
+                : null,
           ),
-        ],
+        ),
+        const SizedBox(height: 5),
+        SizedBox(
+          width: 70,
+          child: Text(
+            name,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white, fontSize: 12),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class MyStatusWidget extends StatefulWidget {
+  const MyStatusWidget({super.key});
+
+  @override
+  State<MyStatusWidget> createState() => _MyStatusWidgetState();
+}
+
+class _MyStatusWidgetState extends State<MyStatusWidget> {
+  String? profilePicUrl;
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfilePic();
+  }
+
+  Future<void> _loadProfilePic() async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) return;
+
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
+
+      if (doc.exists) {
+        setState(() {
+          profilePicUrl = doc.data()?['profilePic'];
+          isLoading = false;
+        });
+      } else {
+        setState(() => isLoading = false);
+      }
+    } catch (e) {
+      print('⚠️ Error loading profilePic: $e');
+      setState(() => isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLoading) {
+      return const SizedBox(
+        width: 60,
+        height: 60,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
+    }
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const StoryUploadPage()),
+        );
+      },
+      child: storyAvatar(
+        'My Status',
+        'assets/images/user.png',
+        imageUrl: profilePicUrl,
+        showOverlay: true,
+        showBorder: false,
       ),
     );
   }

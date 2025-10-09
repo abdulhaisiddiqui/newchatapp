@@ -1,71 +1,50 @@
 enum MessageType {
   text,
   image,
+  audio,
   video,
   document,
-  audio,
-  location,
   contact,
-  other;
+  other,
+  location;
+
+
+  String get name => toString().split('.').last;
 
   String get displayName {
     switch (this) {
-      case MessageType.text:
+      case text:
         return 'Text';
-      case MessageType.image:
+      case image:
         return 'Image';
-      case MessageType.video:
-        return 'Video';
-      case MessageType.document:
-        return 'Document';
-      case MessageType.audio:
+      case audio:
         return 'Audio';
-      case MessageType.location:
-        return 'Location';
-      case MessageType.contact:
+      case video:
+        return 'Video';
+      case document:
+        return 'Document';
+      case contact:
         return 'Contact';
-      case MessageType.other:
-        return 'File';
+      case other:
+        return 'other';
+      case location:
+        return 'Location';
     }
   }
 
-  static MessageType fromString(String type) {
-    switch (type.toLowerCase()) {
-      case 'text':
-        return MessageType.text;
-      case 'image':
-        return MessageType.image;
-      case 'video':
-        return MessageType.video;
-      case 'document':
-        return MessageType.document;
-      case 'audio':
-        return MessageType.audio;
-      case 'location':
-        return MessageType.location;
-      case 'contact':
-        return MessageType.contact;
-      default:
-        return MessageType.other;
-    }
+  static MessageType fromString(String value) {
+    return MessageType.values.firstWhere(
+          (e) => e.name == value,
+      orElse: () => MessageType.text,
+    );
   }
 
-  static MessageType fromMimeType(String mimeType) {
-    if (mimeType.startsWith('image/')) {
-      return MessageType.image;
-    } else if (mimeType.startsWith('video/')) {
-      return MessageType.video;
-    } else if (mimeType.startsWith('audio/')) {
-      return MessageType.audio;
-    } else if (mimeType.contains('pdf') ||
-        mimeType.contains('document') ||
-        mimeType.contains('text') ||
-        mimeType.contains('word') ||
-        mimeType.contains('excel') ||
-        mimeType.contains('powerpoint')) {
-      return MessageType.document;
-    } else {
-      return MessageType.other;
-    }
+  static MessageType fromMimeType(String? mimeType) {
+    if (mimeType == null) return MessageType.text;
+    if (mimeType.startsWith('image/')) return MessageType.image;
+    if (mimeType.startsWith('audio/')) return MessageType.audio;
+    if (mimeType.startsWith('video/')) return MessageType.video;
+    if (mimeType.contains('pdf') || mimeType.contains('document')) return MessageType.document;
+    return MessageType.text;
   }
 }

@@ -1,388 +1,167 @@
-import 'dart:io';
-import 'package:flutter/material.dart';
-import 'package:chatview/chatview.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:chatapp/components/file_selection_dialog.dart';
-import 'package:chatapp/services/file/file_service.dart';
+import 'package:flutter/material.dart';
 
 class GroupChatPage extends StatefulWidget {
   final String groupId;
   final String groupName;
-  final List<String> memberIds;
-  final String groupImage;
+  final String? description;
 
   const GroupChatPage({
-    super.key,
+    Key? key,
     required this.groupId,
     required this.groupName,
-    required this.memberIds,
-    required this.groupImage,
-  });
+    this.description,
+  }) : super(key: key);
 
   @override
   State<GroupChatPage> createState() => _GroupChatPageState();
 }
 
 class _GroupChatPageState extends State<GroupChatPage> {
-  late ChatController _chatController;
-  final _firestore = FirebaseFirestore.instance;
-  final _auth = FirebaseAuth.instance;
-  final _imagePicker = ImagePicker();
-  final _fileService = FileService();
+  final TextEditingController _messageController = TextEditingController();
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  List<ChatUser> _chatUsers = [];
-  bool _isLoading = true;
+  Future<void> sendMessage() async {
+    final text = _messageController.text.trim();
+    if (text.isEmpty) return;
 
-  @override
-  void initState() {
-    super.initState();
-    _initializeChat();
-  }
-
-  Future<void> _initializeChat() async {
-    await _loadGroupMembers();
-    _setupChatController();
-    _listenForMessages();
-  }
-
-  Future<void> _loadGroupMembers() async {
-    final currentUser = _auth.currentUser;
-    if (currentUser == null) return;
-
-    _chatUsers = [];
-
-    // Add current user
-    _chatUsers.add(
-      ChatUser(
-        id: currentUser.uid,
-        name:
-            currentUser.displayName ??
-            currentUser.email?.split('@').first ??
-            'You',
-        profilePhoto: currentUser.photoURL,
-      ),
-    );
-
-    // Add other members
-    for (final memberId in widget.memberIds) {
-      if (memberId == currentUser.uid) continue;
-
-      try {
-        final userDoc = await _firestore
-            .collection('users')
-            .doc(memberId)
-            .get();
-        if (userDoc.exists) {
-          final userData = userDoc.data()!;
-          _chatUsers.add(
-            ChatUser(
-              id: memberId,
-              name:
-                  userData['username'] ??
-                  userData['email']?.split('@').first ??
-                  'User',
-              profilePhoto: userData['profilePic'],
-            ),
-          );
-        }
-      } catch (e) {
-        debugPrint('Error loading member $memberId: $e');
-      }
-    }
-  }
-
-  void _setupChatController() {
-    final currentUser = _auth.currentUser;
-    if (currentUser == null) return;
-
-    _chatController = ChatController(
-      initialMessageList: [],
-      scrollController: ScrollController(),
-      currentUser: ChatUser(
-        id: currentUser.uid,
-        name:
-            currentUser.displayName ??
-            currentUser.email?.split('@').first ??
-            'You',
-        profilePhoto: currentUser.photoURL,
-      ),
-      otherUsers: _chatUsers
-          .where((user) => user.id != currentUser.uid)
-          .toList(),
-    );
-
-    setState(() => _isLoading = false);
-  }
-
-  void _listenForMessages() {
-    _firestore
-        .collection('groups')
-        .doc(widget.groupId)
-        .collection('messages')
-        .orderBy('createdAt', descending: false)
-        .snapshots()
-        .listen((snapshot) async {
-          final messages = <Message>[];
-
-          for (final doc in snapshot.docs) {
-            final data = doc.data();
-            final senderId = data['senderId'] ?? '';
-
-            // Find the chat user for this sender
-            final chatUser = _chatUsers.firstWhere(
-              (user) => user.id == senderId,
-              orElse: () => ChatUser(id: senderId, name: 'Unknown'),
-            );
-
-            MessageType messageType;
-            switch (data['messageType']) {
-              case 'image':
-                messageType = MessageType.image;
-                break;
-              case 'file':
-                messageType = MessageType.custom;
-                break;
-              default:
-                messageType = MessageType.text;
-            }
-
-            final message = Message(
-              id: doc.id,
-              message: data['message'] ?? '',
-              createdAt:
-                  (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-              sentBy: senderId,
-              messageType: messageType,
-            );
-
-            messages.add(message);
-          }
-
-          if (mounted) {
-            setState(() {
-              _chatController.initialMessageList
-                ..clear()
-                ..addAll(messages);
-            });
-          }
-        });
-  }
-
-  Future<void> _sendMessage(
-    String message,
-    ReplyMessage replyMessage,
-    MessageType type,
-  ) async {
-    if (message.trim().isEmpty && type == MessageType.text) return;
-
-    final currentUser = _auth.currentUser;
-    if (currentUser == null) return;
+    final user = _auth.currentUser;
+    if (user == null) return;
 
     await _firestore
-        .collection('groups')
+        .collection("groups")
         .doc(widget.groupId)
-        .collection('messages')
+        .collection("messages")
         .add({
-          'senderId': currentUser.uid,
-          'message': message,
-          'messageType': type == MessageType.image
-              ? 'image'
-              : type == MessageType.custom
-              ? 'file'
-              : 'text',
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-
-    // Update group's last message
-    await _firestore.collection('groups').doc(widget.groupId).update({
-      'lastMessage': message,
-      'lastActivity': FieldValue.serverTimestamp(),
+      "text": text,
+      "senderId": user.uid,
+      "senderName": user.displayName ?? user.email ?? "Unknown",
+      "timestamp": FieldValue.serverTimestamp(),
     });
-  }
 
-  Future<void> _sendImage() async {
-    try {
-      final pickedFile = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
-      );
-      if (pickedFile == null) return;
-
-      // Upload image first
-      final result = await _fileService.uploadFile(
-        file: File(pickedFile.path),
-        chatRoomId: widget.groupId,
-        messageId: DateTime.now().millisecondsSinceEpoch.toString(),
-      );
-
-      if (result.isSuccess && result.fileId != null) {
-        await _sendMessage(
-          result.downloadUrl ?? pickedFile.path,
-          ReplyMessage(),
-          MessageType.image,
-        );
-      }
-    } catch (e) {
-      debugPrint('Error sending image: $e');
-    }
-  }
-
-  Future<void> _sendFile() async {
-    try {
-      // Show file selection dialog
-      showModalBottomSheet(
-        context: context,
-        builder: (context) => FileSelectionDialog(
-          onFilesSelected: (files) async {
-            Navigator.pop(context);
-            for (final file in files) {
-              final result = await _fileService.uploadFile(
-                file: file,
-                chatRoomId: widget.groupId,
-                messageId: DateTime.now().millisecondsSinceEpoch.toString(),
-              );
-
-              if (result.isSuccess) {
-                await _sendMessage(
-                  file.path.split('/').last,
-                  ReplyMessage(),
-                  MessageType.custom,
-                );
-              }
-            }
-          },
-          maxFiles: 5,
-        ),
-      );
-    } catch (e) {
-      debugPrint('Error sending file: $e');
-    }
+    _messageController.clear();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: const Color(0xFF128C7E),
-        title: Row(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: const EdgeInsets.all(2),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.3),
-                  width: 2,
-                ),
-              ),
-              child: CircleAvatar(
-                radius: 18,
-                backgroundColor: Colors.grey[300],
-                child: widget.groupImage.isNotEmpty
-                    ? ClipOval(
-                        child: CachedNetworkImage(
-                          imageUrl: widget.groupImage,
-                          fit: BoxFit.cover,
-                          width: 36,
-                          height: 36,
-                          placeholder: (context, url) =>
-                              const CircularProgressIndicator(),
-                          errorWidget: (context, url, error) =>
-                              const Icon(Icons.group, size: 18),
-                        ),
-                      )
-                    : const Icon(Icons.group, size: 18, color: Colors.black),
-              ),
+            Text(
+              widget.groupName,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    widget.groupName,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    "${widget.memberIds.length} members",
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.8),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w400,
-                    ),
-                  ),
-                ],
+            if (widget.description != null && widget.description!.isNotEmpty)
+              Text(
+                widget.description!,
+                style: const TextStyle(fontSize: 12, color: Colors.white70),
               ),
-            ),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.more_vert, color: Colors.white),
-            onPressed: () {
-              // Group settings
-            },
+      ),
+      body: Column(
+        children: [
+          // 🟢 Real-time message list
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: _firestore
+                  .collection("groups")
+                  .doc(widget.groupId)
+                  .collection("messages")
+                  .orderBy("timestamp", descending: true)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                final messages = snapshot.data!.docs;
+
+                return ListView.builder(
+                  reverse: true,
+                  itemCount: messages.length,
+                  itemBuilder: (context, index) {
+                    final message = messages[index];
+                    final isMe = message["senderId"] == _auth.currentUser!.uid;
+
+                    return Align(
+                      alignment:
+                      isMe ? Alignment.centerRight : Alignment.centerLeft,
+                      child: Container(
+                        margin:
+                        const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                        padding:
+                        const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: isMe
+                              ? Colors.blueAccent.withOpacity(0.8)
+                              : Colors.grey[300],
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: isMe
+                              ? CrossAxisAlignment.end
+                              : CrossAxisAlignment.start,
+                          children: [
+                            if (!isMe)
+                              Text(
+                                message["senderName"] ?? "Unknown",
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            Text(
+                              message["text"],
+                              style: TextStyle(
+                                color: isMe ? Colors.white : Colors.black87,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+
+          // 🟢 Message input field
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            color: Colors.grey[200],
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _messageController,
+                    decoration: const InputDecoration(
+                      hintText: "Type a message...",
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.all(Radius.circular(20)),
+                        borderSide: BorderSide.none,
+                      ),
+                      filled: true,
+                      fillColor: Colors.white,
+                      contentPadding:
+                      EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.send, color: Colors.blueAccent),
+                  onPressed: sendMessage,
+                ),
+              ],
+            ),
           ),
         ],
-      ),
-      body: Container(
-        decoration: BoxDecoration(
-          image: DecorationImage(
-            image: const AssetImage('assets/images/background.png'),
-            fit: BoxFit.cover,
-            opacity: 0.05,
-          ),
-          color: const Color(0xFFECE5DD),
-        ),
-        child: Stack(
-          children: [
-            ChatView(
-              chatController: _chatController,
-              onSendTap: _sendMessage,
-              chatViewState: ChatViewState.hasMessages,
-              sendMessageConfig: SendMessageConfiguration(
-                textFieldConfig: const TextFieldConfiguration(
-                  textStyle: TextStyle(color: Colors.black),
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: 100,
-              right: 16,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFF128C7E),
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.2),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: IconButton(
-                  onPressed: _sendFile,
-                  icon: const Icon(Icons.attach_file, color: Colors.white),
-                  tooltip: 'Send files',
-                  iconSize: 24,
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

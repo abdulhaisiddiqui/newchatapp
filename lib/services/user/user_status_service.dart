@@ -42,6 +42,17 @@ class UserStatusService {
       debugPrint('Error setting user online: $e');
     }
   }
+  /// 🔹 Stream whether a specific user is typing in a chat room
+  Stream<bool> getTypingStatus(String chatRoomId, String userId) {
+    return _firestore
+        .collection('chat_rooms')
+        .doc(chatRoomId)
+        .collection('typing')
+        .doc(userId)
+        .snapshots()
+        .map((snapshot) => snapshot.exists);
+  }
+
 
   /// Mark user offline
   Future<void> setUserOffline() async {
@@ -222,6 +233,7 @@ class UserStatus {
 
   factory UserStatus.offline() =>
       UserStatus(isOnline: false, lastSeen: DateTime.now());
+
 
   String getStatusText() {
     if (isOnline) return 'Online';

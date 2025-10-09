@@ -141,54 +141,58 @@ class _CallScreenState extends State<CallScreen> implements CallStateListener {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1F2937),
+      backgroundColor: const Color(0XFF000E08),
       body: SafeArea(
         child: Column(
           children: [
+            const SizedBox(height: 50),
             // Header
-            Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: MediaQuery.of(context).size.width * 0.06,
-                vertical: 16,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            SizedBox(
+              height: 56,
+              child: Stack(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF374151),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Icon(
-                      Icons.search,
-                      color: Colors.white,
-                      size: MediaQuery.of(context).size.width * 0.05,
+                  Positioned(
+                    left: 10,
+                    child: IconButton(
+                      icon: const Icon(Icons.search, color: Colors.white),
+                      onPressed: () {
+                        Navigator.pop(context);
+                      },
                     ),
                   ),
-                  Text(
-                    'Calls',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: MediaQuery.of(context).size.width * 0.05,
-                      fontWeight: FontWeight.w600,
+                  const Center(
+                    child: Text(
+                      "Calls",
+                      style: TextStyle(
+                        color: Color(0XFFFFFFFF),
+                        fontSize: 20,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF374151),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Icon(
-                      Icons.phone,
-                      color: Colors.white,
-                      size: MediaQuery.of(context).size.width * 0.05,
+                  Positioned(
+                    right: 10,
+                    child: Row(
+                      children: [
+
+                        IconButton(
+                          onPressed: () {
+
+                          },
+                          icon: Icon(
+                             Icons.checklist,
+                            color: Colors.white,
+                          ),
+
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
+
+            const SizedBox(height: 40),
 
             // Content Area
             Expanded(
@@ -196,8 +200,8 @@ class _CallScreenState extends State<CallScreen> implements CallStateListener {
                 decoration: const BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(24),
-                    topRight: Radius.circular(24),
+                    topLeft: Radius.circular(50),
+                    topRight: Radius.circular(50),
                   ),
                 ),
                 child: _isLoading

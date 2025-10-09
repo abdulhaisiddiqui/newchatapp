@@ -1,220 +1,158 @@
 import 'dart:io';
-import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/material.dart';
-import 'package:chatapp/services/error_handler.dart';
 
-class StoryService with ErrorHandler {
+class StoryService {
   final _firestore = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
   final _storage = FirebaseStorage.instance;
 
+  /// 📤 Upload Story (image or text)
   Future<void> uploadStory({
-    required String userId,
-    required String username,
-    String? text,
     File? file,
-    String type = "text", // text | image | video
+    String? text,
+    String? caption,
+    String privacy = 'public', // default privacy
+    required String type,
   }) async {
-    await runSafely(
-      () async {
-        String? downloadUrl;
-
-        if (file != null) {
-          final ref = _storage.ref().child(
-            "stories/$userId/${DateTime.now().millisecondsSinceEpoch}",
-          );
-
-          await ref.putFile(file);
-          downloadUrl = await ref.getDownloadURL();
-        }
-
-        await _firestore
-            .collection("stories")
-            .doc(userId)
-            .collection("userStories")
-            .add({
-              "username": username,
-              "userId": userId,
-              "type": type,
-              "text": text,
-              "url": downloadUrl,
-              "timestamp": FieldValue.serverTimestamp(),
-              "expiresAt": DateTime.now().toUtc().add(
-                const Duration(hours: 24),
-              ),
-            });
-      },
-      onError: (msg) {
-        print("❌ Error uploading story: $msg");
-        throw Exception(msg);
-      },
-    );
-
-    // Show notification for new story
-    await _showStoryNotification(username);
-  }
-
-  // 📬 Show local notification for new story
-  Future<void> _showStoryNotification(String username) async {
     try {
-      await AwesomeNotifications().createNotification(
-        content: NotificationContent(
-          id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
-          channelKey: 'stories',
-          title: 'New Story Posted!',
-          body: '$username added a new story.',
-          notificationLayout: NotificationLayout.BigText,
-          displayOnForeground: false, // Don't show when app is in foreground
-          displayOnBackground: true,
-        ),
-      );
-    } catch (e) {
-      debugPrint('Error showing story notification: $e');
-    }
-  }
+      final user = _auth.currentUser;
+      if (user == null) return;
 
-  // Mark a story as viewed by the current user
-  Future<void> markStoryAsViewed(String userId, String storyId) async {
-    try {
-      final currentUser = _auth.currentUser;
-      if (currentUser == null) return;
+      String? downloadUrl;
 
-      await _firestore
-          .collection("stories")
-          .doc(userId)
-          .collection("userStories")
-          .doc(storyId)
-          .update({
-            "viewedBy": FieldValue.arrayUnion([currentUser.uid]),
-          });
-    } catch (e) {
-      debugPrint('Error marking story as viewed: $e');
-    }
-  }
-
-  Stream<List<Map<String, dynamic>>> getVisibleStories(
-    String currentUserId,
-  ) async* {
-    final chatRooms = await _firestore
-        .collection("chat_rooms")
-        .where("members", arrayContains: currentUserId)
-        .get();
-
-    List<String> chatUserIds = [];
-    for (var room in chatRooms.docs) {
-      final members = List<String>.from(room["members"] ?? []);
-      chatUserIds.addAll(members.where((id) => id != currentUserId));
-    }
-
-    if (chatUserIds.isEmpty) {
-      yield [];
-      return;
-    }
-
-    yield* _firestore.collection("stories").snapshots().asyncMap((
-      snapshot,
-    ) async {
-      List<Map<String, dynamic>> stories = [];
-
-      for (var doc in snapshot.docs) {
-        if (!chatUserIds.contains(doc.id) && doc.id != currentUserId) continue;
-
-        final userData = doc.data();
-        final userStoriesSnap = await doc.reference
-            .collection("userStories")
-            .orderBy("timestamp", descending: true)
-            .where(
-              "expiresAt",
-              isGreaterThan: DateTime.now().toUtc(),
-            ) // Only show active stories
-            .get();
-
-        if (userStoriesSnap.docs.isNotEmpty) {
-          // Get username from users collection if not in stories doc
-          String username = userData["username"] as String? ?? "Unknown";
-          if (username == "Unknown") {
-            try {
-              final userDoc = await _firestore
-                  .collection("users")
-                  .doc(doc.id)
-                  .get();
-              username =
-                  userDoc.data()?["username"] as String? ?? "Unknown User";
-            } catch (e) {
-              username = "Unknown User";
-            }
-          }
-
-          stories.add({
-            "userId": doc.id,
-            "username": username,
-            "stories": userStoriesSnap.docs.map((d) => d.data()).toList(),
-          });
-        }
+      if (file != null) {
+        final ref = _storage
+            .ref()
+            .child('stories')
+            .child(user.uid)
+            .child('${DateTime.now().millisecondsSinceEpoch}');
+        await ref.putFile(file);
+        downloadUrl = await ref.getDownloadURL();
       }
-      return stories;
+
+      final userDoc = await _firestore.collection("users").doc(user.uid).get();
+      final username = userDoc.data()?["username"] ?? "Unknown";
+
+      await _firestore.collection('stories').doc(user.uid).set({
+        "userId": user.uid,
+        "username": username,
+        "updatedAt": FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      final newStoryRef = _firestore
+          .collection('stories')
+          .doc(user.uid)
+          .collection("userStories")
+          .doc();
+
+      await newStoryRef.set({
+        "storyId": newStoryRef.id,
+        "type": type,
+        "url": downloadUrl ?? "",
+        "text": text ?? "",
+        "caption": caption ?? "",
+        "privacy": privacy,
+        "timestamp": FieldValue.serverTimestamp(),
+        "expiresAt": DateTime.now().add(const Duration(hours: 24)),
+        "viewedBy": [],
+      });
+    } catch (e) {
+      print("⚠️ Error uploading story: $e");
+    }
+  }
+
+
+  /// 👁️ Mark a story as viewed
+  Future<void> markStoryAsViewed(String storyDocId, String storyId) async {
+    final currentUid = _auth.currentUser?.uid;
+    if (currentUid == null) return;
+
+    final storyRef = _firestore
+        .collection('stories')
+        .doc(storyDocId)
+        .collection('userStories')
+        .doc(storyId);
+
+    await storyRef.update({
+      'viewedBy': FieldValue.arrayUnion([currentUid]),
+      'updatedAt': FieldValue.serverTimestamp(), // 👈 Trigger Firestore snapshot
+    });
+
+    // 👇 Parent document update bhi trigger karega
+    await _firestore.collection('stories').doc(storyDocId).update({
+      'updatedAt': FieldValue.serverTimestamp(),
     });
   }
 
-  // Fetch all stories for a better story viewer experience
-  Future<List<Map<String, dynamic>>> fetchAllStories(
-    String currentUserId,
-  ) async {
-    try {
-      final chatRooms = await _firestore
-          .collection("chat_rooms")
-          .where("members", arrayContains: currentUserId)
-          .get();
 
-      List<String> chatUserIds = [];
-      for (var room in chatRooms.docs) {
+  /// 🔄 Get visible stories from user's chats
+  /// 🔄 Get visible stories from user's chats (reactive + safe)
+  Stream<List<Map<String, dynamic>>> getVisibleStories(String currentUserId) async* {
+    // 🔹 Chat rooms ka live stream
+    final chatRoomsStream = _firestore
+        .collection("chat_rooms")
+        .where("members", arrayContains: currentUserId)
+        .snapshots();
+
+    await for (final chatSnapshot in chatRoomsStream) {
+      final chatUserIds = <String>{};
+
+      for (var room in chatSnapshot.docs) {
         final members = List<String>.from(room["members"] ?? []);
         chatUserIds.addAll(members.where((id) => id != currentUserId));
       }
 
-      final snapshot = await _firestore.collection("stories").get();
-      List<Map<String, dynamic>> stories = [];
+      if (chatUserIds.isEmpty) {
+        yield [];
+        continue;
+      }
 
-      for (var doc in snapshot.docs) {
-        if (!chatUserIds.contains(doc.id) && doc.id != currentUserId) continue;
+      // 🔹 Stories collection ka live stream
+      yield* _firestore.collection("stories").snapshots().asyncMap((storiesSnap) async {
+        List<Map<String, dynamic>> stories = [];
 
-        final userData = doc.data();
-        final userStoriesSnap = await doc.reference
-            .collection("userStories")
-            .orderBy("timestamp", descending: true)
-            .where("expiresAt", isGreaterThan: DateTime.now().toUtc())
-            .get();
+        for (var doc in storiesSnap.docs) {
+          if (!chatUserIds.contains(doc.id) && doc.id != currentUserId) continue;
 
-        if (userStoriesSnap.docs.isNotEmpty) {
-          // Get username from users collection if not in stories doc
-          String username = userData["username"] as String? ?? "Unknown";
-          if (username == "Unknown") {
-            try {
-              final userDoc = await _firestore
-                  .collection("users")
-                  .doc(doc.id)
-                  .get();
-              username =
-                  userDoc.data()?["username"] as String? ?? "Unknown User";
-            } catch (e) {
-              username = "Unknown User";
-            }
+          final userData = doc.data();
+
+          QuerySnapshot<Map<String, dynamic>>? userStoriesSnap;
+          try {
+            userStoriesSnap = await doc.reference
+                .collection("userStories")
+                .orderBy("timestamp", descending: true)
+                .get();
+          } catch (e) {
+            userStoriesSnap = await doc.reference.collection("userStories").get();
           }
+
+          final userStories = userStoriesSnap.docs.map((d) {
+            final data = d.data();
+            data['storyId'] = d.id;
+            return data;
+          }).toList();
+
+          if (userStories.isEmpty) continue;
+
+          final bool allSeen = userStories.every((story) {
+            final viewedBy = List<String>.from(story['viewedBy'] ?? []);
+            return viewedBy.contains(currentUserId);
+          });
 
           stories.add({
             "userId": doc.id,
-            "username": username,
-            "stories": userStoriesSnap.docs.map((d) => d.data()).toList(),
+            "username": userData["username"] ?? "Unknown",
+            "stories": userStories,
+            "isSeen": allSeen,
           });
         }
-      }
-      return stories;
-    } catch (e) {
-      print("Error fetching stories: $e");
-      return [];
+
+        return stories;
+      });
     }
   }
+
+
 }
