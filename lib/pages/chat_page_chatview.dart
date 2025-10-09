@@ -263,8 +263,13 @@ class _ChatPageChatViewState extends State<ChatPageChatView> {
   }
 
   Future<bool> _checkMicrophonePermission() async {
-    // Web doesn't support microphone permissions
-    if (kIsWeb) return false;
+    // Web doesn't support microphone permissions through permission_handler
+    if (kIsWeb) {
+      _showWebFeatureDialog(
+        'Voice recording is not supported on web. Please use the mobile app for voice messages.',
+      );
+      return false;
+    }
 
     try {
       final status = await Permission.microphone.status;
@@ -399,44 +404,43 @@ class _ChatPageChatViewState extends State<ChatPageChatView> {
               ],
             ),
           ),
-          // Popup menu for additional options (only on mobile)
-          if (!kIsWeb)
-            PopupMenuButton<String>(
-              onSelected: (value) {
-                switch (value) {
-                  case 'location':
-                    _shareLocation();
-                    break;
-                  case 'contact':
-                    _shareContact();
-                    break;
-                }
-              },
-              itemBuilder: (BuildContext context) => [
-                const PopupMenuItem<String>(
-                  value: 'location',
-                  child: Row(
-                    children: [
-                      Icon(Icons.location_on, color: Colors.green),
-                      SizedBox(width: 8),
-                      Text('Share Location'),
-                    ],
-                  ),
+          // Popup menu for additional options (available on both web and mobile)
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              switch (value) {
+                case 'location':
+                  _shareLocation();
+                  break;
+                case 'contact':
+                  _shareContact();
+                  break;
+              }
+            },
+            itemBuilder: (BuildContext context) => [
+              const PopupMenuItem<String>(
+                value: 'location',
+                child: Row(
+                  children: [
+                    Icon(Icons.location_on, color: Colors.green),
+                    SizedBox(width: 8),
+                    Text('Share Location'),
+                  ],
                 ),
-                const PopupMenuItem<String>(
-                  value: 'contact',
-                  child: Row(
-                    children: [
-                      Icon(Icons.person, color: Colors.blue),
-                      SizedBox(width: 8),
-                      Text('Share Contact'),
-                    ],
-                  ),
+              ),
+              const PopupMenuItem<String>(
+                value: 'contact',
+                child: Row(
+                  children: [
+                    Icon(Icons.person, color: Colors.blue),
+                    SizedBox(width: 8),
+                    Text('Share Contact'),
+                  ],
                 ),
-              ],
-              icon: const Icon(Icons.more_vert, color: Colors.white),
-              tooltip: 'More options',
-            ),
+              ),
+            ],
+            icon: const Icon(Icons.more_vert, color: Colors.white),
+            tooltip: 'More options',
+          ),
           IconButton(
             onPressed: () {
               // Add Sentry test button here
@@ -469,15 +473,21 @@ class _ChatPageChatViewState extends State<ChatPageChatView> {
                   textStyle: const TextStyle(color: Colors.black),
                 ),
               ),
+              featureActiveConfig: const FeatureActiveConfig(
+                enableReplySnackBar: true,
+                enableSwipeToReply: true,
+                enableSwipeToSeeTime: true,
+              ),
             ),
-            // Only show mobile-specific features on mobile platforms
-            if (!kIsWeb)
-              Positioned(
-                bottom: 100, // Above the chat input
-                right: 16,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
+            // Show file sharing features on both mobile and web
+            Positioned(
+              bottom: 100, // Above the chat input
+              right: 16,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Voice recording only on mobile (not supported on web)
+                  if (!kIsWeb)
                     Container(
                       margin: const EdgeInsets.only(bottom: 8),
                       decoration: BoxDecoration(
@@ -503,31 +513,29 @@ class _ChatPageChatViewState extends State<ChatPageChatView> {
                         iconSize: 24,
                       ),
                     ),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF128C7E),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.2),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: IconButton(
-                        onPressed: _sendFile,
-                        icon: const Icon(
-                          Icons.attach_file,
-                          color: Colors.white,
+                  // File attachment available on both web and mobile
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF128C7E),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.2),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
                         ),
-                        tooltip: 'Send files',
-                        iconSize: 24,
-                      ),
+                      ],
                     ),
-                  ],
-                ),
+                    child: IconButton(
+                      onPressed: _sendFile,
+                      icon: const Icon(Icons.attach_file, color: Colors.white),
+                      tooltip: 'Send files',
+                      iconSize: 24,
+                    ),
+                  ),
+                ],
               ),
+            ),
           ],
         ),
       ),
@@ -545,12 +553,23 @@ class _ChatPageChatViewState extends State<ChatPageChatView> {
       createdAt: DateTime.now(),
       sentBy: currentUser.id,
       messageType: messageType,
+      replyMessage: replyMessage,
     );
 
     chatController.addMessage(newMessage);
 
-    // Send to Firebase
-    _chatService.sendMessage(widget.receiverUserId, message);
+    // Send to Firebase - handle reply messages
+    if (replyMessage.message.isNotEmpty) {
+      // This is a reply message
+      _chatService.sendReplyMessage(
+        receiverId: widget.receiverUserId,
+        message: message,
+        replyToMessageId: replyMessage.messageId,
+      );
+    } else {
+      // Regular message
+      _chatService.sendMessage(widget.receiverUserId, message);
+    }
   }
 
   Future<void> _shareLocation() async {
@@ -749,8 +768,13 @@ class _ChatPageChatViewState extends State<ChatPageChatView> {
   }
 
   Future<bool> _checkLocationPermission() async {
-    // Web doesn't support location permissions
-    if (kIsWeb) return false;
+    // Web has limited location support
+    if (kIsWeb) {
+      _showWebFeatureDialog(
+        'Location sharing on web requires browser permission. Please allow location access when prompted.',
+      );
+      return true; // Allow the flow to continue, browser will handle permissions
+    }
 
     try {
       final status = await Permission.location.status;
@@ -766,8 +790,13 @@ class _ChatPageChatViewState extends State<ChatPageChatView> {
   }
 
   Future<bool> _checkContactsPermission() async {
-    // Web doesn't support contacts permissions
-    if (kIsWeb) return false;
+    // Web doesn't support native contacts access
+    if (kIsWeb) {
+      _showWebFeatureDialog(
+        'Contact sharing is not supported on web. Please use the mobile app to share contacts.',
+      );
+      return false;
+    }
 
     try {
       final status = await Permission.contacts.status;
@@ -808,6 +837,22 @@ class _ChatPageChatViewState extends State<ChatPageChatView> {
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
+  }
+
+  void _showWebFeatureDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Feature Not Available'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
     );
   }
 }
