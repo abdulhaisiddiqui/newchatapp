@@ -631,7 +631,7 @@ class _ChatPageState extends State<ChatPage> {
                 ),
                 IconButton(
                   icon: SvgPicture.asset(
-                    'assets/images/Video.svg',
+                    'assets/images/UserIcon.png',
                     width: 24,
                     height: 24,
                     color: Colors.black,
@@ -641,8 +641,7 @@ class _ChatPageState extends State<ChatPage> {
               ],
             ),
           ),
-        ],
-      ),
+        ],      ),
       body: Column(
         children: [
           Expanded(child: _buildMessageList()),

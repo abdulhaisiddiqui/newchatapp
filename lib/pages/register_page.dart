@@ -100,7 +100,7 @@ class _RegisterPageState extends State<RegisterPage> {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF1976D2)),
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -130,11 +130,11 @@ class _RegisterPageState extends State<RegisterPage> {
 
                     // App Title
                     const Text(
-                      'Create Account',
+                      'Sign Up with Email',
                       style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF1976D2),
+                        color: Colors.black,
                       ),
                     ),
 
@@ -142,7 +142,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
                     // Description Text
                     const Text(
-                      'Join us and start connecting with friends',
+                      'Get chatting with friends and family today by signing up for our chat app!',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 16,
@@ -161,7 +161,7 @@ class _RegisterPageState extends State<RegisterPage> {
                         hintText: 'Choose a username',
                         prefixIcon: const Icon(
                           Icons.person,
-                          color: Color(0xFF1976D2),
+                          color: Color(0XFF24786D),
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -186,7 +186,7 @@ class _RegisterPageState extends State<RegisterPage> {
                         hintText: 'Enter your email',
                         prefixIcon: const Icon(
                           Icons.email,
-                          color: Color(0xFF1976D2),
+                          color: Color(0XFF24786D),
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -214,7 +214,7 @@ class _RegisterPageState extends State<RegisterPage> {
                         hintText: 'Create a password',
                         prefixIcon: const Icon(
                           Icons.lock,
-                          color: Color(0xFF1976D2),
+                          color: Color(0XFF24786D),
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -242,7 +242,7 @@ class _RegisterPageState extends State<RegisterPage> {
                         hintText: 'Confirm your password',
                         prefixIcon: const Icon(
                           Icons.lock_outline,
-                          color: Color(0xFF1976D2),
+                          color: Color(0XFF24786D),
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -268,13 +268,13 @@ class _RegisterPageState extends State<RegisterPage> {
                       child: _isLoading
                           ? const Center(
                               child: CircularProgressIndicator(
-                                color: Color(0xFF1976D2),
+                                color: Color(0XFF24786D),
                               ),
                             )
                           : ElevatedButton(
                               onPressed: signUp,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF1976D2),
+                                backgroundColor: const Color(0XFF24786D),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
@@ -283,6 +283,7 @@ class _RegisterPageState extends State<RegisterPage> {
                                 'Create Account',
                                 style: TextStyle(
                                   fontSize: 16,
+                                  color: Colors.white,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -306,7 +307,7 @@ class _RegisterPageState extends State<RegisterPage> {
                             'Sign In',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF1976D2),
+                              color: Color(0XFF24786D),
                             ),
                           ),
                         ),

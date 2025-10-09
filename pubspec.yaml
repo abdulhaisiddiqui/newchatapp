@@ -127,6 +127,12 @@ flutter:
     - assets/images/user.png
     - assets/images/Qr code.png
     - assets/images/search.png
+    - assets/images/cameraIcon.png
+    - assets/images/docIcon.png
+    - assets/images/chartIcon.png
+    - assets/images/mediaIcon.png
+    - assets/images/userIcon.png
+    - assets/images/m-Call.svg
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
