@@ -1,5 +1,6 @@
 import 'package:chatapp/pages/chat_page.dart';
 import 'package:chatapp/pages/create_group_page.dart';
+import 'package:chatapp/pages/setting_screen2.dart';
 import 'package:chatapp/pages/story_upload_page.dart';
 import 'package:chatapp/services/auth/auth_service.dart';
 import 'package:chatapp/services/story/story_service.dart';
@@ -276,13 +277,23 @@ class _HomePageState extends State<HomePage> {
                                   snapshot.data!.data() as Map<String, dynamic>;
                               final imageUrl = userData['profilePic'] ?? '';
 
-                              return CircleAvatar(
-                                radius: 20,
-                                backgroundImage: imageUrl.isNotEmpty
-                                    ? NetworkImage(imageUrl)
-                                    : const AssetImage('assets/images/user.png')
-                                          as ImageProvider,
-                              );
+                              return GestureDetector(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => SettingScreen2(),
+                                    ),
+                                  );
+                                },
+                                child: CircleAvatar(
+                                  radius: 20,
+                                  backgroundImage: imageUrl.isNotEmpty
+                                      ? NetworkImage(imageUrl)
+                                      : const AssetImage('assets/images/user.png') as ImageProvider,
+                                ),
+                              )
+                              ;
                             },
                           ),
                           // const SizedBox(width: 10),
@@ -445,7 +456,7 @@ class _HomePageState extends State<HomePage> {
         children: [
           FloatingActionButton(
             heroTag: 'new_chat', // Unique tag to avoid Hero animation conflicts
-            backgroundColor: const Color(0xFF128C7E),
+            backgroundColor: const Color(0XFF24786D),
             onPressed: () {
               // Action for starting a new chat
               Navigator.push(context, MaterialPageRoute(builder: (context)=>ContactScreen()));
@@ -456,7 +467,7 @@ class _HomePageState extends State<HomePage> {
           const SizedBox(height: 16), // Spacing between FABs
           FloatingActionButton(
             heroTag: 'new_group', // Unique tag for second FAB
-            backgroundColor: const Color(0xFF25D366),
+            backgroundColor: const Color(0XFF20A065),
             onPressed: () {
               // Action for creating a group chat or another feature
               Navigator.push(context, MaterialPageRoute(builder: (context)=>CreateGroupPage()));

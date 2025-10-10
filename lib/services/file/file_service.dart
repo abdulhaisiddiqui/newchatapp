@@ -26,55 +26,39 @@ class FileService {
 
   /// Upload a file to Firebase Storage with optimized handling and error recovery
   Future<FileUploadResult> uploadFile({
-    required dynamic file, // File on mobile, different type on web
+    required dynamic file,
     required String chatRoomId,
     required String messageId,
     Function(double)? onProgress,
     Function(String)? onStatusUpdate,
   }) async {
-    // Web platform file operations are not supported
     if (kIsWeb) {
-      onStatusUpdate?.call(
-        'Error: File operations not supported on web platform',
-      );
-      return FileUploadResult.error(
-        'File operations not supported on web platform',
-      );
+      onStatusUpdate?.call('Error: File operations not supported on web platform');
+      return FileUploadResult.error('File operations not supported on web platform');
     }
 
     try {
-      // Status update
       onStatusUpdate?.call('Preparing upload...');
-
-      // Get current user
       final currentUser = _auth.currentUser;
       if (currentUser == null) {
         onStatusUpdate?.call('Error: User not authenticated');
         return FileUploadResult.error('User not authenticated');
       }
 
-      // Validate file size
       int fileSize = await (file as File).length();
       if (fileSize > MAX_FILE_SIZE) {
         onStatusUpdate?.call('Error: File size exceeds limit');
         return FileUploadResult.error('File size exceeds 50MB limit');
       }
 
-      // Generate unique file ID and name
       String fileId = _generateFileId();
       String originalFileName = path.basename((file as File).path);
       String fileExtension = path.extension((file as File).path).toLowerCase();
       String fileName = '$fileId$fileExtension';
-
-      // Get MIME type
-      String? mimeType =
-          lookupMimeType((file as File).path) ?? 'application/octet-stream';
-
-      // Create storage path
+      String? mimeType = lookupMimeType((file as File).path) ?? 'application/octet-stream';
       String storagePath = '$CHAT_FILES_PATH/$chatRoomId/$fileName';
-      onStatusUpdate?.call('Starting upload...');
 
-      // Upload file to Firebase Storage with retry logic
+      onStatusUpdate?.call('Starting upload...');
       UploadTask uploadTask;
       int retryCount = 0;
       const maxRetries = 3;
@@ -86,63 +70,30 @@ class FileService {
         } catch (e) {
           if (retryCount >= maxRetries) throw e;
           retryCount++;
-          onStatusUpdate?.call(
-            'Retrying upload (${retryCount}/${maxRetries})...',
-          );
+          onStatusUpdate?.call('Retrying upload (${retryCount}/${maxRetries})...');
           await Future.delayed(Duration(seconds: 2 * retryCount));
         }
       }
 
-      // Track progress
       uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
         if (snapshot.totalBytes > 0) {
           double progress = snapshot.bytesTransferred / snapshot.totalBytes;
           onProgress?.call(progress);
-
-          // Update status based on progress
-          if (progress < 0.3) {
-            onStatusUpdate?.call('Uploading file...');
-          } else if (progress < 0.7) {
-            onStatusUpdate?.call('Upload in progress...');
-          } else if (progress < 1.0) {
-            onStatusUpdate?.call('Almost complete...');
-          } else {
-            onStatusUpdate?.call('Processing upload...');
-          }
         }
       });
 
-      // Wait for upload completion
       onStatusUpdate?.call('Finalizing upload...');
       TaskSnapshot snapshot = await uploadTask;
       String downloadUrl = await snapshot.ref.getDownloadURL();
 
-      // Create FileAttachment object
-      FileAttachment fileAttachment = FileAttachment(
-        fileId: fileId,
-        fileName: fileName,
-        originalFileName: originalFileName,
-        fileExtension: fileExtension,
-        fileSizeBytes: fileSize,
-        mimeType: mimeType,
-        downloadUrl: downloadUrl,
-        uploadedAt: Timestamp.now(),
-        uploadedBy: currentUser.uid,
-        status: FileStatus.uploaded,
-      );
-
-      // Store file metadata in Firestore
-      onStatusUpdate?.call('Saving file information...');
-      await _storeFileMetadata(fileAttachment, chatRoomId, messageId);
-
       onStatusUpdate?.call('Upload complete');
-      return FileUploadResult.success(downloadUrl: downloadUrl, fileId: fileId);
+      return FileUploadResult.success(
+        downloadUrl: downloadUrl,
+        fileId: fileId,
+      );
     } catch (e) {
       onStatusUpdate?.call('Error: ${e.toString()}');
-      return FileUploadResult.error(
-        'Upload failed: ${e.toString()}',
-        e is Exception ? e : Exception(e.toString()),
-      );
+      return FileUploadResult.error(e.toString(), e is Exception ? e : Exception(e.toString()));
     }
   }
 

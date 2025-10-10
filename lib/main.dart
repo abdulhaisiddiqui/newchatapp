@@ -138,7 +138,7 @@ Future<void> main() async {
                 receiverEmail != null) {
               navigatorKey.currentState?.push(
                 MaterialPageRoute(
-                  builder: (context) => ChatPageChatView(
+                  builder: (context) => ChatPage(
                     receiverUserId: receiverId,
                     receiverUserEmail: receiverEmail,
                   ),
@@ -403,7 +403,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             final userEmail =
                 args['receiverUserEmail'] ?? args['username'] ?? '';
             return MaterialPageRoute(
-              builder: (context) => ChatPageChatView(
+              builder: (context) => ChatPage(
                 receiverUserId: userId,
                 receiverUserEmail: userEmail,
               ),

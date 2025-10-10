@@ -5,7 +5,10 @@ import 'package:chatapp/components/voice_recorder.dart';
 import 'package:chatapp/pages/location_share_page.dart';
 import 'package:chatapp/pages/contact_share_page.dart';
 import 'package:chatapp/pages/image_viewer_page.dart';
+import 'package:chatapp/pages/user_profile_page.dart';
 import 'package:chatapp/services/chat/chat_service.dart';
+import 'package:chatapp/model/file_attachment.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:chatapp/services/file/file_service.dart';
 import 'package:chatapp/services/call/call_manager.dart';
 import 'package:chatapp/model/message.dart';
@@ -22,6 +25,9 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:path/path.dart' as path;
+import 'package:flutter_image_compress/flutter_image_compress.dart';
+
 
 class ChatPage extends StatefulWidget {
   final String receiverUserEmail;
@@ -56,82 +62,56 @@ class _ChatPageState extends State<ChatPage> {
   Map<String, String> _messageReactions = {};
   List<String> _chatImageUrls = [];
   Set<String> _notifiedMessageIds = {};
+  List<Message> _cachedMessages = [];
 
   List<Message> _localMessages = [];
 
 
-  void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-      ),
-    );
-  }
+  // void _showErrorSnackBar(String message) {
+  //   ScaffoldMessenger.of(context).showSnackBar(
+  //     SnackBar(
+  //       content: Text(message),
+  //       backgroundColor: Colors.red,
+  //     ),
+  //   );
+  // }
   void sendMessage() async {
-    if (_messageController.text.isNotEmpty) {
-      Message? tempMessage; // 🔹 Declare outside try-catch
+    if (_messageController.text.isEmpty) return;
 
-      try {
-        tempMessage = Message(
-          id: DateTime.now().millisecondsSinceEpoch.toString(), // Unique ID
-          senderId: _firebaseAuth.currentUser!.uid,
-          senderEmail: _firebaseAuth.currentUser!.email ?? 'unknown@example.com',
+    final messageId = DateTime.now().millisecondsSinceEpoch.toString();
+    try {
+      if (_replyToMessage != null) {
+        await _chatService.sendReplyMessage(
           receiverId: widget.receiverUserId,
           message: _messageController.text,
-          timestamp: Timestamp.now(),
-          type: MessageType.text,
-          isRead: false,
+          replyToMessageId: _replyToMessage!.timestamp.millisecondsSinceEpoch.toString(),
+          messageId: messageId,
         );
-
-        // 🔹 Add to local list for instant UI update
-        setState(() {
-          _localMessages.add(tempMessage!);
-          _messageController.clear();
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (_scrollController.hasClients) {
-              _scrollController.animateTo(
-                0.0,
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOut,
-              );
-            }
-          });
-        });
-
-        // 🔹 Send message to Firestore
-        if (_replyToMessage != null) {
-          await _chatService.sendReplyMessage(
-            receiverId: widget.receiverUserId,
-            message: tempMessage.message,
-            replyToMessageId: _replyToMessage!.timestamp.millisecondsSinceEpoch.toString(),
-          );
-          setState(() {
-            _replyToMessage = null;
-          });
-        } else {
-          await _chatService.sendMessage(
-            widget.receiverUserId,
-            tempMessage.message,
-          );
-        }
-
-        // 🔹 Remove temp message (Firestore confirmed)
-        setState(() {
-          _localMessages.removeWhere((m) => m.id == tempMessage!.id);
-        });
-      } catch (e) {
-        // 🔹 Safe null check
-        if (tempMessage != null) {
-          setState(() {
-            _localMessages.removeWhere((m) => m.id == tempMessage!.id);
-          });
-        }
-        _showErrorSnackBar('Failed to send message: $e');
+      } else {
+        await _chatService.sendMessage(
+          widget.receiverUserId,
+          _messageController.text,
+          messageId: messageId,
+        );
       }
+      setState(() {
+        _messageController.clear();
+        _replyToMessage = null;
+      });
+      // Scroll to the latest message
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) {
+          _scrollController.animateTo(
+            0.0,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    } catch (e) {
+      _showErrorSnackBar('Failed to send message: $e', onRetry: sendMessage);
     }
   }
-
 
   void _handleFileSelection(List<File> files) async {
     if (files.isEmpty) return;
@@ -143,30 +123,110 @@ class _ChatPageState extends State<ChatPage> {
 
     try {
       for (File file in files) {
+        File uploadFile = file;
+        final startTime = DateTime.now();
+        debugPrint('Original file size: ${await file.length() / 1024 / 1024} MB');
+
+        if (file.path.endsWith('.jpg') || file.path.endsWith('.jpeg') || file.path.endsWith('.png')) {
+          final compressedPath = file.path.replaceAll(RegExp(r'\.\w+$'), '_compressed.jpg');
+          final compressedFile = await FlutterImageCompress.compressAndGetFile(
+            file.path,
+            compressedPath,
+            quality: 70,
+            minWidth: 1024,
+            minHeight: 1024,
+          );
+          if (compressedFile != null) {
+            uploadFile = File(compressedFile.path);
+            debugPrint('Compressed file size: ${await uploadFile.length() / 1024 / 1024} MB');
+          }
+        }
+
+        final tempMessageId = DateTime.now().millisecondsSinceEpoch.toString();
+        final String fileExtension = path.extension(uploadFile.path).toLowerCase();
+        final tempMessage = Message(
+          id: tempMessageId,
+          senderId: _firebaseAuth.currentUser!.uid,
+          senderEmail: _firebaseAuth.currentUser!.email ?? 'unknown@example.com',
+          receiverId: widget.receiverUserId,
+          message: '',
+          isEdited: true,
+          timestamp: Timestamp.now(),
+          type: MessageType.image,
+          fileAttachment: FileAttachment(
+            fileId: tempMessageId,
+            fileName: uploadFile.path.split('/').last,
+            downloadUrl: uploadFile.path,
+            mimeType: 'image/jpeg',
+            fileSizeBytes: await uploadFile.length(),
+            originalFileName: uploadFile.path.split('/').last,
+            fileExtension: fileExtension,
+            uploadedAt: Timestamp.now(),
+            uploadedBy: _firebaseAuth.currentUser!.uid,
+            status: FileStatus.uploading,
+          ),
+          isRead: false,
+        );
+
+        setState(() {
+          _localMessages.add(tempMessage);
+          _cachedMessages.add(tempMessage);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (_scrollController.hasClients) {
+              _scrollController.animateTo(
+                0.0,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOut,
+              );
+            }
+          });
+        });
+
         final result = await _fileService.uploadFile(
-          file: file,
+          file: uploadFile,
           chatRoomId: _getChatRoomId(),
-          messageId: DateTime.now().millisecondsSinceEpoch.toString(),
+          messageId: tempMessageId,
           onProgress: (progress) {
             setState(() => _uploadProgress = progress);
           },
+          onStatusUpdate: (status) {
+            debugPrint('Upload status: $status');
+          },
         );
 
-        if (result.isSuccess && result.fileId != null) {
-          final fileAttachment = await _fileService.getFileMetadata(result.fileId!);
-          if (fileAttachment != null) {
-            await _chatService.sendFileMessage(
-              receiverId: widget.receiverUserId,
-              fileAttachment: fileAttachment,
-              textMessage: _messageController.text.isNotEmpty ? _messageController.text : '',
-            );
-            if (_messageController.text.isNotEmpty) {
-              _messageController.clear();
-            }
-          } else {
-            _showErrorSnackBar('Failed to get file information');
+        debugPrint('Upload completed in ${DateTime.now().difference(startTime).inMilliseconds} ms');
+
+        if (result.isSuccess && result.fileId != null && result.downloadUrl != null) {
+          final fileAttachment = FileAttachment(
+            fileId: result.fileId!,
+            fileName: uploadFile.path.split('/').last,
+            downloadUrl: result.downloadUrl!,
+            mimeType: 'image/jpeg',
+            fileSizeBytes: await uploadFile.length(),
+            originalFileName: uploadFile.path.split('/').last,
+            fileExtension: fileExtension,
+            uploadedAt: Timestamp.now(),
+            uploadedBy: _firebaseAuth.currentUser!.uid,
+            status: FileStatus.uploaded,
+          );
+          await _chatService.sendFileMessage(
+            receiverId: widget.receiverUserId,
+            fileAttachment: fileAttachment,
+            textMessage: _messageController.text.isNotEmpty ? _messageController.text : '',
+            messageId: tempMessageId,
+          );
+          if (_messageController.text.isNotEmpty) {
+            _messageController.clear();
           }
+          setState(() {
+            _localMessages.removeWhere((m) => m.id == tempMessageId);
+            _cachedMessages.removeWhere((m) => m.id == tempMessageId);
+          });
         } else {
+          setState(() {
+            _localMessages.removeWhere((m) => m.id == tempMessageId);
+            _cachedMessages.removeWhere((m) => m.id == tempMessageId);
+          });
           _showErrorSnackBar('Failed to upload file: ${result.error}');
         }
       }
@@ -180,6 +240,144 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
+  void _showErrorSnackBar(String message, {VoidCallback? onRetry}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 4),
+        action: onRetry != null
+            ? SnackBarAction(
+          label: 'Retry',
+          textColor: Colors.white,
+          onPressed: onRetry,
+        )
+            : null,
+      ),
+    );
+  }
+  // void _handleFileSelection(List<File> files) async {
+  //   if (files.isEmpty) return;
+  //
+  //   setState(() {
+  //     _isUploading = true;
+  //     _uploadProgress = 0.0;
+  //   });
+  //
+  //   try {
+  //     for (File file in files) {
+  //       File uploadFile = file;
+  //       final startTime = DateTime.now();
+  //       debugPrint('Original file size: ${await file.length() / 1024 / 1024} MB');
+  //
+  //       // Compress image
+  //       if (file.path.endsWith('.jpg') || file.path.endsWith('.jpeg') || file.path.endsWith('.png')) {
+  //         final compressedPath = file.path.replaceAll(RegExp(r'\.\w+$'), '_compressed.jpg');
+  //         final compressedFile = await FlutterImageCompress.compressAndGetFile(
+  //           file.path,
+  //           compressedPath,
+  //           quality: 70,
+  //           minWidth: 1024,
+  //           minHeight: 1024,
+  //         );
+  //         if (compressedFile != null) {
+  //           uploadFile = File(compressedFile.path);
+  //           debugPrint('Compressed file size: ${await uploadFile.length() / 1024 / 1024} MB');
+  //         }
+  //       }
+  //
+  //       final tempMessageId = DateTime.now().millisecondsSinceEpoch.toString();
+  //       final String fileExtension = path.extension(uploadFile.path).toLowerCase();
+  //       final tempMessage = Message(
+  //         id: tempMessageId,
+  //         senderId: _firebaseAuth.currentUser!.uid,
+  //         senderEmail: _firebaseAuth.currentUser!.email ?? 'unknown@example.com',
+  //         receiverId: widget.receiverUserId,
+  //         message: '',
+  //         timestamp: Timestamp.now(),
+  //         type: MessageType.image,
+  //         fileAttachment: FileAttachment(
+  //           fileId: tempMessageId,
+  //           fileName: uploadFile.path.split('/').last,
+  //           downloadUrl: uploadFile.path,
+  //           mimeType: 'image/jpeg',
+  //           fileSizeBytes: await uploadFile.length(),
+  //           originalFileName: uploadFile.path.split('/').last,
+  //           fileExtension: fileExtension,
+  //           uploadedAt: Timestamp.now(),
+  //           uploadedBy: _firebaseAuth.currentUser!.uid,
+  //           status: FileStatus.uploading,
+  //         ),
+  //         isRead: false,
+  //       );
+  //
+  //       setState(() {
+  //         _localMessages.add(tempMessage);
+  //         WidgetsBinding.instance.addPostFrameCallback((_) {
+  //           if (_scrollController.hasClients) {
+  //             _scrollController.animateTo(
+  //               _scrollController.position.minScrollExtent,
+  //               duration: const Duration(milliseconds: 300),
+  //               curve: Curves.easeOut,
+  //             );
+  //           }
+  //         });
+  //       });
+  //
+  //       final result = await _fileService.uploadFile(
+  //         file: uploadFile,
+  //         chatRoomId: _getChatRoomId(),
+  //         messageId: tempMessageId,
+  //         onProgress: (progress) {
+  //           setState(() => _uploadProgress = progress);
+  //         },
+  //         onStatusUpdate: (status) {
+  //           debugPrint('Upload status: $status');
+  //         },
+  //       );
+  //
+  //       debugPrint('Upload completed in ${DateTime.now().difference(startTime).inMilliseconds} ms');
+  //
+  //       if (result.isSuccess && result.fileId != null && result.downloadUrl != null) {
+  //         final fileAttachment = FileAttachment(
+  //           fileId: result.fileId!,
+  //           fileName: uploadFile.path.split('/').last,
+  //           downloadUrl: result.downloadUrl!,
+  //           mimeType: 'image/jpeg',
+  //           fileSizeBytes: await uploadFile.length(),
+  //           originalFileName: uploadFile.path.split('/').last,
+  //           fileExtension: fileExtension,
+  //           uploadedAt: Timestamp.now(),
+  //           uploadedBy: _firebaseAuth.currentUser!.uid,
+  //           status: FileStatus.uploaded,
+  //         );
+  //         await _chatService.sendFileMessage(
+  //           receiverId: widget.receiverUserId,
+  //           fileAttachment: fileAttachment,
+  //           textMessage: _messageController.text.isNotEmpty ? _messageController.text : '',
+  //         );
+  //         if (_messageController.text.isNotEmpty) {
+  //           _messageController.clear();
+  //         }
+  //       } else {
+  //         _showErrorSnackBar('Failed to upload file: ${result.error}');
+  //       }
+  //
+  //       setState(() {
+  //         _localMessages.removeWhere((m) => m.id == tempMessageId);
+  //       });
+  //     }
+  //   } catch (e) {
+  //     _showErrorSnackBar('Error uploading files: $e');
+  //
+  //   } finally {
+  //     setState(() {
+  //       _isUploading = false;
+  //       _uploadProgress = 0.0;
+  //     });
+  //   }
+  // }
+
   void _handleVoiceRecording(String audioPath) {
     _onVoiceRecordingComplete(audioPath);
   }
@@ -190,10 +388,46 @@ class _ChatPageState extends State<ChatPage> {
       return;
     }
 
+    final messageId = DateTime.now().millisecondsSinceEpoch.toString();
+    final tempMessage = Message(
+      id: messageId,
+      senderId: _firebaseAuth.currentUser!.uid,
+      senderEmail: _firebaseAuth.currentUser!.email ?? 'unknown@example.com',
+      receiverId: widget.receiverUserId,
+      message: '',
+      isEdited: true,
+      timestamp: Timestamp.now(),
+      type: MessageType.audio,
+      fileAttachment: FileAttachment(
+        fileId: messageId,
+        fileName: audioPath.split('/').last,
+        downloadUrl: audioPath,
+        mimeType: 'audio/mpeg',
+        fileSizeBytes: await File(audioPath).length(),
+        originalFileName: audioPath.split('/').last,
+        fileExtension: '.mp3',
+        uploadedAt: Timestamp.now(),
+        uploadedBy: _firebaseAuth.currentUser!.uid,
+        status: FileStatus.uploading,
+      ),
+      isRead: false,
+    );
+
     setState(() {
       _isUploading = true;
       _uploadProgress = 0.0;
       _statusMessage = 'Uploading voice message...';
+      _localMessages.add(tempMessage);
+      _cachedMessages.add(tempMessage);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) {
+          _scrollController.animateTo(
+            0.0,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
+      });
     });
 
     try {
@@ -201,7 +435,7 @@ class _ChatPageState extends State<ChatPage> {
       final result = await _fileService.uploadFile(
         file: audioFile,
         chatRoomId: _getChatRoomId(),
-        messageId: DateTime.now().millisecondsSinceEpoch.toString(),
+        messageId: messageId,
         onProgress: (progress) {
           setState(() => _uploadProgress = progress);
         },
@@ -217,17 +451,26 @@ class _ChatPageState extends State<ChatPage> {
             receiverId: widget.receiverUserId,
             fileAttachment: fileAttachment,
             textMessage: '',
+            messageId: messageId,
           );
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Voice message sent successfully')),
           );
+          setState(() {
+            _localMessages.removeWhere((m) => m.id == messageId);
+            _cachedMessages.removeWhere((m) => m.id == messageId);
+          });
         } else {
-          _showErrorSnackBar('Failed to get voice message metadata');
+          throw Exception('Failed to get voice message metadata');
         }
       } else {
-        _showErrorSnackBar('Failed to upload voice message: ${result.error}');
+        throw Exception('Failed to upload voice message: ${result.error}');
       }
     } catch (e) {
+      setState(() {
+        _localMessages.removeWhere((m) => m.id == messageId);
+        _cachedMessages.removeWhere((m) => m.id == messageId);
+      });
       _showErrorSnackBar('Error sending voice message: $e');
     } finally {
       setState(() {
@@ -445,10 +688,12 @@ class _ChatPageState extends State<ChatPage> {
         final name = result['name'] as String?;
         final phone = result['phone'] as String?;
         if (name != null && phone != null) {
+          final messageId = DateTime.now().millisecondsSinceEpoch.toString();
           await _chatService.sendContactMessage(
             receiverId: widget.receiverUserId,
             contactName: name,
             contactPhone: phone,
+            messageId: messageId,
           );
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Contact shared successfully')),
@@ -471,11 +716,13 @@ class _ChatPageState extends State<ChatPage> {
         final latitude = result['latitude'] as double;
         final longitude = result['longitude'] as double;
         final googleMapsUrl = "https://www.google.com/maps/search/?api=1&query=$latitude,$longitude";
+        final messageId = DateTime.now().millisecondsSinceEpoch.toString();
         await _chatService.sendLocationMessage(
           receiverId: widget.receiverUserId,
           latitude: latitude,
           longitude: longitude,
           mapsUrl: googleMapsUrl,
+          messageId: messageId,
         );
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Location shared successfully')),
@@ -590,24 +837,38 @@ class _ChatPageState extends State<ChatPage> {
                       ],
                     ),
                     const SizedBox(width: 10),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          username,
-                          style: const TextStyle(
-                            color: Colors.black,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => UserProfilePage(
+                              userId: widget.receiverUserId,
+                              username: username,
+                              profilePic: profilePic,
+                              chatRoomId: _getChatRoomId(),
+                            ),
                           ),
-                        ),
-                        UserStatusIndicator(
-                          userId: widget.receiverUserId,
-                          showText: true,
-                          size: 7,
-
-                        ),
-                      ],
+                        );
+                      },
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            username,
+                            style: const TextStyle(
+                              color: Colors.black,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          UserStatusIndicator(
+                            userId: widget.receiverUserId,
+                            showText: true,
+                            size: 7,
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 );
@@ -631,7 +892,7 @@ class _ChatPageState extends State<ChatPage> {
                 ),
                 IconButton(
                   icon: SvgPicture.asset(
-                    'assets/images/UserIcon.png',
+                    'assets/images/Video.svg',
                     width: 24,
                     height: 24,
                     color: Colors.black,
@@ -641,7 +902,8 @@ class _ChatPageState extends State<ChatPage> {
               ],
             ),
           ),
-        ],      ),
+        ],
+      ),
       body: Column(
         children: [
           Expanded(child: _buildMessageList()),
@@ -784,6 +1046,13 @@ class _ChatPageState extends State<ChatPage> {
               widget.receiverUserId,
             ),
             builder: (context, snapshot) {
+              final messages = snapshot.data ?? [];
+
+              if (snapshot.connectionState == ConnectionState.waiting && messages.isEmpty) {
+                debugPrint('StreamBuilder: Waiting for data');
+                return const Center(child: CircularProgressIndicator());
+              }
+
               if (snapshot.hasError) {
                 debugPrint('StreamBuilder error: ${snapshot.error}');
                 return Center(
@@ -802,16 +1071,8 @@ class _ChatPageState extends State<ChatPage> {
                   ),
                 );
               }
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                debugPrint('StreamBuilder: Waiting for data');
-                return const Center(child: CircularProgressIndicator());
-              }
-              final messages = snapshot.data ?? [];
-              final allMessages = [...messages, ..._localMessages];
-              allMessages.sort((a, b) => b.timestamp.compareTo(a.timestamp)); // Sort descending
-              debugPrint('StreamBuilder: Rendering ${allMessages.length} messages');
 
-              if (allMessages.isEmpty) {
+              if (messages.isEmpty) {
                 debugPrint('StreamBuilder: No messages');
                 return const Center(
                   child: Column(
@@ -827,8 +1088,8 @@ class _ChatPageState extends State<ChatPage> {
                 );
               }
 
-              if (allMessages.isNotEmpty) {
-                final latestMessage = allMessages.first; // Latest message is first after sorting
+              if (messages.isNotEmpty) {
+                final latestMessage = messages.first;
                 final messageId = latestMessage.timestamp.millisecondsSinceEpoch.toString();
                 if (latestMessage.senderId != currentUser.uid &&
                     !latestMessage.isRead &&
@@ -845,12 +1106,12 @@ class _ChatPageState extends State<ChatPage> {
               }
 
               return ListView.builder(
-                reverse: false, // Latest messages at the bottom
+                reverse: true,
                 padding: const EdgeInsets.all(16),
-                controller: ScrollController(), // Maintain scroll position
-                itemCount: allMessages.length + 1,
+                controller: _scrollController,
+                itemCount: messages.length + 1,
                 itemBuilder: (context, index) {
-                  if (index == allMessages.length) {
+                  if (index == messages.length) {
                     return Center(
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -869,7 +1130,7 @@ class _ChatPageState extends State<ChatPage> {
                       ),
                     );
                   }
-                  return _buildMessageItemFromMessage(allMessages[allMessages.length - 1 - index]);
+                  return _buildMessageItemFromMessage(messages[index]);
                 },
               );
             },
@@ -892,101 +1153,127 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Widget _buildCurrentUserMessage(Message message) {
-    debugPrint('Rendering current user message: ${message.toMap()}');
+    debugPrint('Rendering curent user message: ${message.toMap()}');
     return Align(
       alignment: Alignment.centerRight,
-      child: GestureDetector(
-        onLongPress: () => _handleLongPressReaction(message),
-        onHorizontalDragEnd: (details) {
-          if (details.primaryVelocity! > 0) {
-            _handleSwipeToReply(message);
-          }
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          margin: const EdgeInsets.only(left: 50),
-          decoration: BoxDecoration(
-            color: Colors.teal,
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(13),
-              bottomLeft: Radius.circular(13),
-              bottomRight: Radius.circular(13),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          GestureDetector(
+            onLongPress: () => _handleLongPressReaction(message),
+            onHorizontalDragEnd: (details) {
+              if (details.primaryVelocity! > 0) {
+                _handleSwipeToReply(message);
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              margin: const EdgeInsets.only(left: 50),
+              decoration: BoxDecoration(
+                color: Colors.teal,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(13),
+                  bottomLeft: Radius.circular(13),
+                  bottomRight: Radius.circular(13),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (message.fileAttachment != null && message.fileAttachment!.downloadUrl.isNotEmpty)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: message.fileAttachment!.downloadUrl.startsWith('file://') ||
+                          message.fileAttachment!.downloadUrl.contains('/cache/')
+                          ? Image.file(
+                        File(message.fileAttachment!.downloadUrl),
+                        width: 160,
+                        height: 160,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          debugPrint('Local image load error: $error');
+                          return const Icon(
+                            Icons.broken_image,
+                            size: 50,
+                            color: Colors.grey,
+                          );
+                        },
+                      )
+                          : Image.network(
+                        message.fileAttachment!.downloadUrl,
+                        width: 160,
+                        height: 160,
+                        fit: BoxFit.cover,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return const SizedBox(
+                            width: 40,
+                            height: 40,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          );
+                        },
+                        errorBuilder: (context, error, stackTrace) {
+                          debugPrint('Image load error: $error, URL: ${message.fileAttachment!.downloadUrl}');
+                          return const Icon(
+                            Icons.broken_image,
+                            size: 50,
+                            color: Colors.grey,
+                          );
+                        },
+                      ),
+                    )
+                  else if (message.type == MessageType.audio)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.play_arrow, color: Colors.white),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.graphic_eq, color: Colors.white),
+                        const SizedBox(width: 8),
+                        Text(
+                          message.fileAttachment?.fileName ?? "Voice message",
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      ],
+                    )
+                  else if (message.type == MessageType.contact)
+                      Text(
+                        'Contact: ${message.message}',
+                        style: const TextStyle(color: Colors.white, fontSize: 16),
+                      )
+                    else if (message.type == MessageType.location)
+                        Text(
+                          'Location: ${message.message}',
+                          style: const TextStyle(color: Colors.white, fontSize: 16),
+                        )
+                      else
+                        Text(
+                          message.message,
+                          style: const TextStyle(color: Colors.white, fontSize: 16),
+                        ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _formatTimestamp(message.timestamp.toDate()),
+                    style: const TextStyle(color: Colors.white70, fontSize: 10),
+                  ),
+                  if (_messageReactions.containsKey(message.timestamp.millisecondsSinceEpoch.toString()))
+                    Text(
+                      _messageReactions[message.timestamp.millisecondsSinceEpoch.toString()]!,
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                ],
+              ),
             ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              if (message.fileAttachment != null && message.fileAttachment!.downloadUrl.isNotEmpty)
-                GestureDetector(
-                  onTap: () => _openImageViewer(message.fileAttachment!.downloadUrl),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Image.network(
-                      message.fileAttachment!.downloadUrl,
-                      width: 160,
-                      height: 160,
-                      fit: BoxFit.cover,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return const SizedBox(
-                          width: 40,
-                          height: 40,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        );
-                      },
-                      errorBuilder: (context, error, stackTrace) {
-                        debugPrint('Image load error: $error, URL: ${message.fileAttachment!.downloadUrl}');
-                        return const Icon(
-                          Icons.broken_image,
-                          size: 50,
-                          color: Colors.grey,
-                        );
-                      },
-                    ),
-                  ),
-                )
-              else if (message.type == MessageType.audio)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.play_arrow, color: Colors.white),
-                    const SizedBox(width: 4),
-                    const Icon(Icons.graphic_eq, color: Colors.white),
-                    const SizedBox(width: 8),
-                    Text(
-                      message.fileAttachment?.fileName ?? "Voice message",
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                  ],
-                )
-              else if (message.type == MessageType.contact)
-                  Text(
-                    'Contact: ${message.message}',
-                    style: const TextStyle(color: Colors.white, fontSize: 16),
-                  )
-                else if (message.type == MessageType.location)
-                    Text(
-                      'Location: ${message.message}',
-                      style: const TextStyle(color: Colors.white, fontSize: 16),
-                    )
-                  else
-                    Text(
-                      message.message,
-                      style: const TextStyle(color: Colors.white, fontSize: 16),
-                    ),
-              const SizedBox(height: 4),
-              Text(
-                _formatTimestamp(message.timestamp.toDate()),
-                style: const TextStyle(color: Colors.white70, fontSize: 10),
-              ),
-              if (_messageReactions.containsKey(message.timestamp.millisecondsSinceEpoch.toString()))
-                Text(
-                  _messageReactions[message.timestamp.millisecondsSinceEpoch.toString()]!,
-                  style: const TextStyle(fontSize: 16),
-                ),
-            ],
-          ),
-        ),
+          if (_isUploading &&
+              message.fileAttachment != null &&
+              message.fileAttachment!.downloadUrl.startsWith('file://'))
+            CircularProgressIndicator(
+              value: _uploadProgress,
+              strokeWidth: 2,
+              backgroundColor: Colors.white.withOpacity(0.5),
+            ),
+        ],
       ),
     );
   }
@@ -1311,107 +1598,117 @@ class _ChatInputBarState extends State<ChatInputBar> with SingleTickerProviderSt
       height: 90,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: const BoxDecoration(color: Colors.white),
-      child: Row(
+      child: Column(
         children: [
-          IconButton(
-            onPressed: _showAttachmentMenu,
-            icon: const Icon(Icons.attach_file, color: Colors.black, size: 24),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(13),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: widget.messageController,
-                      decoration: const InputDecoration(
-                        hintText: "Write your message",
-                        hintStyle: TextStyle(color: Colors.grey),
-                        border: InputBorder.none,
-                      ),
-                    ),
-                  ),
-                  const Icon(
-                    Icons.content_paste_rounded,
-                    color: Colors.grey,
-                    weight: 600,
-                    size: 24,
-                  ),
-                ],
-              ),
+          if (widget.isUploading)
+            LinearProgressIndicator(
+              value: widget.uploadProgress,
+              backgroundColor: Colors.grey.shade200,
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.teal),
             ),
-          ),
-          const SizedBox(width: 10),
-          IconButton(
-            icon: const Icon(Icons.photo_camera_outlined, color: Colors.black, weight: 600, size: 24),
-            onPressed: widget.onCameraPressed,
-          ),
-          const SizedBox(width: 10),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
-            transitionBuilder: (child, animation) {
-              return ScaleTransition(scale: animation, child: child);
-            },
-            child: _hasText
-                ? Material(
-              key: const ValueKey('send'),
-              color: const Color(0xFF128C7E),
-              shape: const CircleBorder(),
-              child: InkWell(
-                onTap: widget.isUploading ? null : widget.onSendMessage,
-                customBorder: const CircleBorder(),
+          Row(
+            children: [
+              IconButton(
+                onPressed: _showAttachmentMenu,
+                icon: const Icon(Icons.attach_file, color: Colors.black, size: 24),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
                 child: Container(
-                  padding: const EdgeInsets.all(12),
-                  child: Icon(Icons.send, color: Colors.white, size: 22),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: widget.messageController,
+                          decoration: const InputDecoration(
+                            hintText: "Write your message",
+                            hintStyle: TextStyle(color: Colors.grey),
+                            border: InputBorder.none,
+                          ),
+                        ),
+                      ),
+                      const Icon(
+                        Icons.content_paste_rounded,
+                        color: Colors.grey,
+                        weight: 600,
+                        size: 24,
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            )
-                : Stack(
-              alignment: Alignment.center,
-              key: const ValueKey('mic'),
-              children: [
-                ScaleTransition(
-                  scale: _micScaleAnimation,
-                  child: Material(
-                    color: _isRecording ? Colors.red : const Color(0xFF128C7E),
-                    shape: const CircleBorder(),
-                    child: InkWell(
-                      onTapDown: (_) => _handleMicPress(),
-                      customBorder: const CircleBorder(),
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        child: Icon(
-                          _isRecording ? Icons.mic : Icons.mic_none,
-                          color: Colors.white,
-                          size: 22,
+              const SizedBox(width: 10),
+              IconButton(
+                icon: const Icon(Icons.photo_camera_outlined, color: Colors.black, weight: 600, size: 24),
+                onPressed: widget.onCameraPressed,
+              ),
+              const SizedBox(width: 10),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                transitionBuilder: (child, animation) {
+                  return ScaleTransition(scale: animation, child: child);
+                },
+                child: _hasText
+                    ? Material(
+                  key: const ValueKey('send'),
+                  color: const Color(0xFF128C7E),
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    onTap: widget.isUploading ? null : widget.onSendMessage,
+                    customBorder: const CircleBorder(),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      child: Icon(Icons.send, color: Colors.white, size: 22),
+                    ),
+                  ),
+                )
+                    : Stack(
+                  alignment: Alignment.center,
+                  key: const ValueKey('mic'),
+                  children: [
+                    ScaleTransition(
+                      scale: _micScaleAnimation,
+                      child: Material(
+                        color: _isRecording ? Colors.red : const Color(0xFF128C7E),
+                        shape: const CircleBorder(),
+                        child: InkWell(
+                          onTapDown: (_) => _handleMicPress(),
+                          customBorder: const CircleBorder(),
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            child: Icon(
+                              _isRecording ? Icons.mic : Icons.mic_none,
+                              color: Colors.white,
+                              size: 22,
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                    if (_isRecording)
+                      Positioned.fill(
+                        child: VoiceRecorder(
+                          onStop: (audioPath) {
+                            setState(() {
+                              _isRecording = false;
+                              _hasText = widget.messageController.text.trim().isNotEmpty;
+                            });
+                            _micController.reverse();
+                            if (widget.onVoiceRecordStop != null && audioPath.isNotEmpty) {
+                              widget.onVoiceRecordStop!(audioPath);
+                            }
+                          },
+                        ),
+                      ),
+                  ],
                 ),
-                if (_isRecording)
-                  Positioned.fill(
-                    child: VoiceRecorder(
-                      onStop: (audioPath) {
-                        setState(() {
-                          _isRecording = false;
-                          _hasText = widget.messageController.text.trim().isNotEmpty;
-                        });
-                        _micController.reverse();
-                        if (widget.onVoiceRecordStop != null && audioPath.isNotEmpty) {
-                          widget.onVoiceRecordStop!(audioPath);
-                        }
-                      },
-                    ),
-                  ),
-              ],
-            ),
+              ),
+            ],
           ),
         ],
       ),

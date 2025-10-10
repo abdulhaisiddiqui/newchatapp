@@ -7,21 +7,20 @@ import 'package:chatview/chatview.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:rxdart/rxdart.dart';
 
 class ChatService extends ChangeNotifier {
-  // get instance of auth and firestore
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  //SEND TEXT MESSAGES
-  Future<void> sendMessage(String receiverId, String message) async {
-    await sendTextMessage(receiverId, message);
+  // SEND TEXT MESSAGES
+  Future<void> sendMessage(String receiverId, String message, {required String messageId}) async {
+    await sendTextMessage(receiverId, message, messageId: messageId);
   }
 
-  //CREATE GROUP CHAT
+  // CREATE GROUP CHAT
   Future<String?> createGroupChat({
     required List<String> memberIds,
     required String groupName,
@@ -37,18 +36,15 @@ class ChatService extends ChangeNotifier {
       throw Exception('Group chat must have at least 2 members');
     }
 
-    // Add current user to members if not already included
     final allMembers = List<String>.from(memberIds);
     if (!allMembers.contains(currentUser.uid)) {
       allMembers.add(currentUser.uid);
     }
 
-    // Sort member IDs to create consistent chat room ID
     allMembers.sort();
     final chatRoomId = allMembers.join("_");
 
     try {
-      // Create group chat room
       await _firestore.collection('chat_rooms').doc(chatRoomId).set({
         'members': allMembers,
         'chatType': 'group',
@@ -67,13 +63,11 @@ class ChatService extends ChangeNotifier {
     }
   }
 
-  //SEND TEXT MESSAGES (Enhanced)
-  Future<void> sendTextMessage(String receiverId, String message) async {
+  // SEND TEXT MESSAGES (Enhanced)
+  Future<void> sendTextMessage(String receiverId, String message, {required String messageId}) async {
     final currentUser = _firebaseAuth.currentUser!;
     final chatRoomId = getChatRoomId(currentUser.uid, receiverId);
-    final messageId = DateTime.now().millisecondsSinceEpoch.toString();
 
-    // Create a Message object
     final newMessage = app_message.Message(
       id: messageId,
       senderId: currentUser.uid,
@@ -86,135 +80,45 @@ class ChatService extends ChangeNotifier {
       isEdited: false,
     );
 
-    // Save message to Firestore
-    await _firestore
+    final batch = _firestore.batch();
+    final messageRef = _firestore
         .collection('chat_rooms')
         .doc(chatRoomId)
         .collection('messages')
-        .doc(messageId)
-        .set(newMessage.toMap());
+        .doc(messageId);
+    final chatRoomRef = _firestore.collection('chat_rooms').doc(chatRoomId);
+
+    // Save message
+    batch.set(messageRef, newMessage.toMap());
 
     // Update chat room metadata
-    await _firestore.collection('chat_rooms').doc(chatRoomId).set({
-      'members': [currentUser.uid, receiverId], // Changed from 'participants' to 'members'
-      'lastMessage': message,
-      'lastMessageTime': FieldValue.serverTimestamp(),
-      'unreadCount': {receiverId: FieldValue.increment(1)},
-      'chatType': 'direct', // Add chat type for clarity
-      'hiddenFor': FieldValue.arrayRemove([currentUser.uid]),
-    }, SetOptions(merge: true));
+    batch.set(
+      chatRoomRef,
+      {
+        'members': [currentUser.uid, receiverId],
+        'lastMessage': message,
+        'lastMessageTime': FieldValue.serverTimestamp(),
+        'lastMessageSenderId': currentUser.uid,
+        'unreadCount': {receiverId: FieldValue.increment(1)},
+        'chatType': 'direct',
+        'hiddenFor': FieldValue.arrayRemove([currentUser.uid]),
+      },
+      SetOptions(merge: true),
+    );
+
+    // Commit batch
+    await batch.commit();
 
     // Send notification
     await _sendNotificationToReceiver(receiverId, message);
   }
 
-
-  //SEND CONTACT MESSAGES (Updated for CustomMessage)
-  Future<void> sendContactMessage({
-    required String receiverId,
-    required String contactName,
-    required String contactPhone,
-  }) async {
-    //get current user info
-    final currentUser = _firebaseAuth.currentUser;
-    if (currentUser == null) {
-      throw Exception('User not authenticated');
-    }
-    final String currentUserId = currentUser.uid;
-    final String currentUserEmail = currentUser.email ?? 'unknown@example.com';
-
-    // Create ChatUser for chatview
-    final ChatUser sender = ChatUser(id: currentUserId, name: currentUserEmail);
-
-    // Create custom message
-    final customMessage = CustomMessage(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      message: 'Shared contact: $contactName',
-      sender: sender,
-      createdAt: DateTime.now(),
-      customType: CustomMessageType.contact,
-      extraData: {
-        'name': contactName,
-        'phone': contactPhone,
-        'senderEmail': currentUserEmail,
-      },
-    );
-
-    await _sendCustomMessageToFirestore(customMessage, receiverId);
-  }
-
-  //SEND LOCATION MESSAGES (Updated for CustomMessage)
-  Future<void> sendLocationMessage({
-    required String receiverId,
-    required double latitude,
-    required double longitude,
-    String? mapsUrl,
-  }) async {
-    //get current user info
-    final currentUser = _firebaseAuth.currentUser;
-    if (currentUser == null) {
-      throw Exception('User not authenticated');
-    }
-    final String currentUserId = currentUser.uid;
-    final String currentUserEmail = currentUser.email ?? 'unknown@example.com';
-
-    // Create ChatUser for chatview
-    final ChatUser sender = ChatUser(id: currentUserId, name: currentUserEmail);
-
-    // Create custom message
-    final customMessage = CustomMessage(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      message: 'Shared location',
-      sender: sender,
-      createdAt: DateTime.now(),
-      customType: CustomMessageType.location,
-      extraData: {
-        'lat': latitude,
-        'lng': longitude,
-        'address': 'Shared location',
-        'mapsUrl': mapsUrl,
-        'senderEmail': currentUserEmail,
-      },
-    );
-
-    await _sendCustomMessageToFirestore(customMessage, receiverId);
-  }
-
-  //SEND FILE MESSAGES
-  Future<void> sendFileMessage({
-    required String receiverId,
-    required FileAttachment fileAttachment,
-    String? textMessage,
-  }) async {
-    final currentUser = _firebaseAuth.currentUser;
-    if (currentUser == null) {
-      throw Exception('User not authenticated');
-    }
-    final String currentUserId = currentUser.uid;
-    final String currentUserEmail = currentUser.email ?? 'unknown@example.com';
-    final Timestamp timestamp = Timestamp.now();
-
-    app_message.Message newMessage = app_message.Message(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      senderId: currentUserId,
-      senderEmail: currentUserEmail,
-      receiverId: receiverId,
-      message: textMessage ?? '',
-      timestamp: timestamp,
-      type: app_message_type.MessageType.fromMimeType(fileAttachment.mimeType),
-      fileAttachment: fileAttachment,
-      isRead: false,
-      isEdited: false,
-    );
-
-    await _sendMessageToFirestore(newMessage, receiverId);
-  }
-
-  //SEND REPLY MESSAGE
+  // SEND REPLY MESSAGE
   Future<void> sendReplyMessage({
     required String receiverId,
     required String message,
     required String replyToMessageId,
+    required String messageId,
     app_message_type.MessageType type = app_message_type.MessageType.text,
     FileAttachment? fileAttachment,
   }) async {
@@ -222,22 +126,19 @@ class ChatService extends ChangeNotifier {
     if (currentUser == null) {
       throw Exception('User not authenticated');
     }
-    final String currentUserId = currentUser.uid;
-    final String currentUserEmail = currentUser.email ?? 'unknown@example.com';
-    final Timestamp timestamp = Timestamp.now();
+    final chatRoomId = getChatRoomId(currentUser.uid, receiverId);
 
-    // Determine message type
     final messageType = fileAttachment != null
         ? app_message_type.MessageType.fromMimeType(fileAttachment.mimeType)
         : type;
 
-    app_message.Message newMessage = app_message.Message(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      senderId: currentUserId,
-      senderEmail: currentUserEmail,
+    final newMessage = app_message.Message(
+      id: messageId,
+      senderId: currentUser.uid,
+      senderEmail: currentUser.email ?? 'unknown@example.com',
       receiverId: receiverId,
       message: message.isNotEmpty ? message : '',
-      timestamp: timestamp,
+      timestamp: Timestamp.now(),
       type: messageType,
       fileAttachment: fileAttachment,
       isRead: false,
@@ -245,10 +146,218 @@ class ChatService extends ChangeNotifier {
       isEdited: false,
     );
 
-    await _sendMessageToFirestore(newMessage, receiverId);
+    final batch = _firestore.batch();
+    final messageRef = _firestore
+        .collection('chat_rooms')
+        .doc(chatRoomId)
+        .collection('messages')
+        .doc(messageId);
+    final chatRoomRef = _firestore.collection('chat_rooms').doc(chatRoomId);
+
+    // Save message
+    batch.set(messageRef, newMessage.toMap());
+
+    // Update chat room metadata
+    batch.set(
+      chatRoomRef,
+      {
+        'members': [currentUser.uid, receiverId],
+        'lastMessage': message.isNotEmpty ? message : 'Attachment',
+        'lastMessageTime': FieldValue.serverTimestamp(),
+        'lastMessageSenderId': currentUser.uid,
+        'unreadCount': {receiverId: FieldValue.increment(1)},
+        'chatType': 'direct',
+        'hiddenFor': FieldValue.arrayRemove([currentUser.uid]),
+      },
+      SetOptions(merge: true),
+    );
+
+    // Commit batch
+    await batch.commit();
+
+    // Send notification
+    await _sendNotificationToReceiver(receiverId, message.isNotEmpty ? message : 'Replied with attachment');
   }
 
-  //EDIT MESSAGE
+  // SEND FILE MESSAGES
+  Future<void> sendFileMessage({
+    required String receiverId,
+    required FileAttachment fileAttachment,
+    String? textMessage,
+    required String messageId,
+  }) async {
+    final currentUser = _firebaseAuth.currentUser;
+    if (currentUser == null) {
+      throw Exception('User not authenticated');
+    }
+    final chatRoomId = getChatRoomId(currentUser.uid, receiverId);
+
+    final newMessage = app_message.Message(
+      id: messageId,
+      senderId: currentUser.uid,
+      senderEmail: currentUser.email ?? 'unknown@example.com',
+      receiverId: receiverId,
+      message: textMessage ?? '',
+      timestamp: Timestamp.now(),
+      type: app_message_type.MessageType.fromMimeType(fileAttachment.mimeType),
+      fileAttachment: fileAttachment,
+      isRead: false,
+      isEdited: false,
+    );
+
+    final batch = _firestore.batch();
+    final messageRef = _firestore
+        .collection('chat_rooms')
+        .doc(chatRoomId)
+        .collection('messages')
+        .doc(messageId);
+    final chatRoomRef = _firestore.collection('chat_rooms').doc(chatRoomId);
+
+    // Save message
+    batch.set(messageRef, newMessage.toMap());
+
+    // Update chat room metadata
+    batch.set(
+      chatRoomRef,
+      {
+        'members': [currentUser.uid, receiverId],
+        'lastMessage': textMessage ?? 'Attachment',
+        'lastMessageTime': FieldValue.serverTimestamp(),
+        'lastMessageSenderId': currentUser.uid,
+        'unreadCount': {receiverId: FieldValue.increment(1)},
+        'chatType': 'direct',
+        'fileCount': FieldValue.increment(1),
+        'hiddenFor': FieldValue.arrayRemove([currentUser.uid]),
+      },
+      SetOptions(merge: true),
+    );
+
+    // Commit batch
+    await batch.commit();
+
+    // Send notification
+    await _sendNotificationToReceiver(receiverId, textMessage ?? 'Sent a file');
+  }
+
+  // SEND CONTACT MESSAGES
+  Future<void> sendContactMessage({
+    required String receiverId,
+    required String contactName,
+    required String contactPhone,
+    required String messageId,
+  }) async {
+    final currentUser = _firebaseAuth.currentUser;
+    if (currentUser == null) {
+      throw Exception('User not authenticated');
+    }
+    final chatRoomId = getChatRoomId(currentUser.uid, receiverId);
+
+    final newMessage = app_message.Message(
+      id: messageId,
+      senderId: currentUser.uid,
+      senderEmail: currentUser.email ?? 'unknown@example.com',
+      receiverId: receiverId,
+      message: 'Shared contact: $contactName ($contactPhone)',
+      timestamp: Timestamp.now(),
+      type: app_message_type.MessageType.contact,
+      isRead: false,
+      isEdited: false,
+    );
+
+    final batch = _firestore.batch();
+    final messageRef = _firestore
+        .collection('chat_rooms')
+        .doc(chatRoomId)
+        .collection('messages')
+        .doc(messageId);
+    final chatRoomRef = _firestore.collection('chat_rooms').doc(chatRoomId);
+
+    // Save message
+    batch.set(messageRef, newMessage.toMap());
+
+    // Update chat room metadata
+    batch.set(
+      chatRoomRef,
+      {
+        'members': [currentUser.uid, receiverId],
+        'lastMessage': newMessage.message,
+        'lastMessageTime': FieldValue.serverTimestamp(),
+        'lastMessageSenderId': currentUser.uid,
+        'unreadCount': {receiverId: FieldValue.increment(1)},
+        'chatType': 'direct',
+        'hiddenFor': FieldValue.arrayRemove([currentUser.uid]),
+      },
+      SetOptions(merge: true),
+    );
+
+    // Commit batch
+    await batch.commit();
+
+    // Send notification
+    await _sendNotificationToReceiver(receiverId, newMessage.message);
+  }
+
+  // SEND LOCATION MESSAGES
+  Future<void> sendLocationMessage({
+    required String receiverId,
+    required double latitude,
+    required double longitude,
+    String? mapsUrl,
+    required String messageId,
+  }) async {
+    final currentUser = _firebaseAuth.currentUser;
+    if (currentUser == null) {
+      throw Exception('User not authenticated');
+    }
+    final chatRoomId = getChatRoomId(currentUser.uid, receiverId);
+
+    final messageContent = mapsUrl ?? 'Shared location: ($latitude, $longitude)';
+    final newMessage = app_message.Message(
+      id: messageId,
+      senderId: currentUser.uid,
+      senderEmail: currentUser.email ?? 'unknown@example.com',
+      receiverId: receiverId,
+      message: messageContent,
+      timestamp: Timestamp.now(),
+      type: app_message_type.MessageType.location,
+      isRead: false,
+      isEdited: false,
+    );
+
+    final batch = _firestore.batch();
+    final messageRef = _firestore
+        .collection('chat_rooms')
+        .doc(chatRoomId)
+        .collection('messages')
+        .doc(messageId);
+    final chatRoomRef = _firestore.collection('chat_rooms').doc(chatRoomId);
+
+    // Save message
+    batch.set(messageRef, newMessage.toMap());
+
+    // Update chat room metadata
+    batch.set(
+      chatRoomRef,
+      {
+        'members': [currentUser.uid, receiverId],
+        'lastMessage': newMessage.message,
+        'lastMessageTime': FieldValue.serverTimestamp(),
+        'lastMessageSenderId': currentUser.uid,
+        'unreadCount': {receiverId: FieldValue.increment(1)},
+        'chatType': 'direct',
+        'hiddenFor': FieldValue.arrayRemove([currentUser.uid]),
+      },
+      SetOptions(merge: true),
+    );
+
+    // Commit batch
+    await batch.commit();
+
+    // Send notification
+    await _sendNotificationToReceiver(receiverId, newMessage.message);
+  }
+
+  // EDIT MESSAGE
   Future<void> editMessage({
     required String messageId,
     required String chatRoomId,
@@ -258,11 +367,9 @@ class ChatService extends ChangeNotifier {
     if (currentUser == null) {
       throw Exception('User not authenticated');
     }
-    final String currentUserId = currentUser.uid;
 
     try {
-      // Get the original message to verify ownership
-      DocumentSnapshot messageDoc = await _firestore
+      final messageDoc = await _firestore
           .collection('chat_rooms')
           .doc(chatRoomId)
           .collection('messages')
@@ -273,31 +380,37 @@ class ChatService extends ChangeNotifier {
         throw Exception('Message not found');
       }
 
-      Map<String, dynamic> messageData =
-          messageDoc.data() as Map<String, dynamic>;
-
-      // Check if current user is the sender
-      if (messageData['senderId'] != currentUserId) {
+      final messageData = messageDoc.data() as Map<String, dynamic>;
+      if (messageData['senderId'] != currentUser.uid) {
         throw Exception('You can only edit your own messages');
       }
 
-      // Update the message
-      await _firestore
-          .collection('chat_rooms')
-          .doc(chatRoomId)
-          .collection('messages')
-          .doc(messageId)
-          .update({
-            'message': newMessage,
-            'isEdited': true,
-            'editedAt': FieldValue.serverTimestamp(),
-          });
+      final batch = _firestore.batch();
+      batch.update(
+        _firestore.collection('chat_rooms').doc(chatRoomId).collection('messages').doc(messageId),
+        {
+          'message': newMessage,
+          'isEdited': true,
+          'editedAt': FieldValue.serverTimestamp(),
+        },
+      );
+      batch.set(
+        _firestore.collection('chat_rooms').doc(chatRoomId),
+        {
+          'lastMessage': newMessage,
+          'lastMessageTime': FieldValue.serverTimestamp(),
+          'lastMessageSenderId': currentUser.uid,
+        },
+        SetOptions(merge: true),
+      );
+
+      await batch.commit();
     } catch (e) {
       throw Exception('Failed to edit message: ${e.toString()}');
     }
   }
 
-  //DELETE MESSAGE
+  // DELETE MESSAGE
   Future<void> deleteMessage({
     required String messageId,
     required String chatRoomId,
@@ -306,11 +419,9 @@ class ChatService extends ChangeNotifier {
     if (currentUser == null) {
       throw Exception('User not authenticated');
     }
-    final String currentUserId = currentUser.uid;
 
     try {
-      // Get the message to verify ownership and check for file attachments
-      DocumentSnapshot messageDoc = await _firestore
+      final messageDoc = await _firestore
           .collection('chat_rooms')
           .doc(chatRoomId)
           .collection('messages')
@@ -321,158 +432,140 @@ class ChatService extends ChangeNotifier {
         throw Exception('Message not found');
       }
 
-      Map<String, dynamic> messageData =
-          messageDoc.data() as Map<String, dynamic>;
-
-      // Check if current user is the sender
-      if (messageData['senderId'] != currentUserId) {
+      final messageData = messageDoc.data() as Map<String, dynamic>;
+      if (messageData['senderId'] != currentUser.uid) {
         throw Exception('You can only delete your own messages');
       }
 
-      // If message has file attachment, delete the file too
+      final batch = _firestore.batch();
+      batch.delete(
+        _firestore.collection('chat_rooms').doc(chatRoomId).collection('messages').doc(messageId),
+      );
       if (messageData['fileAttachment'] != null) {
-        // Note: File deletion would be handled by FileService
-        // FileAttachment fileAttachment = FileAttachment.fromMap(messageData['fileAttachment']);
-        // await FileService().deleteFile(fileId: fileAttachment.fileId, chatRoomId: chatRoomId);
+        // Note: File deletion should be handled by FileService
+        // final fileAttachment = FileAttachment.fromMap(messageData['fileAttachment']);
+        // batch.delete(...); // Add file deletion logic if needed
       }
 
-      // Delete the message
-      await _firestore
-          .collection('chat_rooms')
-          .doc(chatRoomId)
-          .collection('messages')
-          .doc(messageId)
-          .delete();
+      await batch.commit();
     } catch (e) {
       throw Exception('Failed to delete message: ${e.toString()}');
     }
   }
 
-  //HELPER METHOD TO SEND MESSAGE TO FIRESTORE
+  // HELPER METHOD TO SEND MESSAGE TO FIRESTORE
   Future<void> _sendMessageToFirestore(
-    app_message.Message message,
-    String receiverId, {
-    List<String>? additionalMembers,
-  }) async {
-    // Determine chat room ID and members
+      app_message.Message message,
+      String receiverId, {
+        List<String>? additionalMembers,
+      }) async {
     List<String> members;
     String chatRoomId;
 
     if (additionalMembers != null && additionalMembers.isNotEmpty) {
-      // Group chat
       members = [message.senderId, receiverId, ...additionalMembers];
       members.sort();
       chatRoomId = members.join("_");
     } else {
-      // Direct chat (existing logic)
       members = [message.senderId, receiverId];
       members.sort();
       chatRoomId = members.join("_");
     }
 
-    // 1. Save message
-    await _firestore
+    final batch = _firestore.batch();
+    final messageRef = _firestore
         .collection('chat_rooms')
         .doc(chatRoomId)
         .collection('messages')
-        .add(message.toMap());
+        .doc(message.id);
+    final chatRoomRef = _firestore.collection('chat_rooms').doc(chatRoomId);
 
-    // 2. Update chat room metadata
-    await _updateChatRoomMetadata(chatRoomId, message, members: members);
+    // Save message
+    batch.set(messageRef, message.toMap());
 
-    // 3. Increment unread count for all receivers (except sender)
+    // Update chat room metadata
+    batch.set(
+      chatRoomRef,
+      {
+        'members': members,
+        'lastMessage': message.message.isNotEmpty ? message.message : 'Attachment',
+        'lastMessageTime': FieldValue.serverTimestamp(),
+        'lastMessageSenderId': message.senderId,
+        'unreadCount': {receiverId: FieldValue.increment(1)},
+        'messageCount': FieldValue.increment(1),
+        if (message.fileAttachment != null) 'fileCount': FieldValue.increment(1),
+        'chatType': members.length > 2 ? 'group' : 'direct',
+        'hiddenFor': FieldValue.arrayRemove([message.senderId]),
+      },
+      SetOptions(merge: true),
+    );
+
+    // Commit batch
+    await batch.commit();
+
+    // Send notifications to all receivers except sender
     final receivers = members.where((id) => id != message.senderId).toList();
     for (final receiver in receivers) {
-      await _incrementUnreadCount(chatRoomId, receiver);
-      // 4. Send push notification to each receiver
-      await _sendNotificationToReceiver(receiver, message.message);
+      await _sendNotificationToReceiver(receiver, message.message.isNotEmpty ? message.message : 'Sent an attachment');
     }
   }
 
-  //HELPER METHOD TO SEND CUSTOM MESSAGE TO FIRESTORE
+  // HELPER METHOD TO SEND CUSTOM MESSAGE TO FIRESTORE
   Future<void> _sendCustomMessageToFirestore(
-    CustomMessage customMessage,
-    String receiverId,
-  ) async {
-    List<String> ids = [customMessage.sender.id, receiverId];
-    ids.sort();
-    String chatRoomId = ids.join("_");
+      CustomMessage customMessage,
+      String receiverId,
+      ) async {
+    final chatRoomId = getChatRoomId(customMessage.sender.id, receiverId);
 
-    // 1. Save custom message
-    await _firestore
+    final batch = _firestore.batch();
+    final messageRef = _firestore
         .collection('chat_rooms')
         .doc(chatRoomId)
         .collection('messages')
-        .add(customMessage.toFirestore());
+        .doc(customMessage.id);
+    final chatRoomRef = _firestore.collection('chat_rooms').doc(chatRoomId);
 
-    // 2. Create a legacy Message object for metadata update
-    final legacyMessage = app_message.Message(
-      id: DateTime.now().millisecondsSinceEpoch.toString(), // ✅ Add this line
-      senderId: customMessage.sender.id,
-      senderEmail: customMessage.extraData?['senderEmail'] ?? '',
-      receiverId: receiverId,
-      message: customMessage.message,
-      timestamp: Timestamp.fromDate(customMessage.createdAt),
-      type: app_message_type.MessageType.text,
-      isRead: false,
+    // Save custom message
+    batch.set(messageRef, customMessage.toFirestore());
+
+    // Update chat room metadata
+    batch.set(
+      chatRoomRef,
+      {
+        'members': [customMessage.sender.id, receiverId],
+        'lastMessage': customMessage.message,
+        'lastMessageTime': FieldValue.serverTimestamp(),
+        'lastMessageSenderId': customMessage.sender.id,
+        'unreadCount': {receiverId: FieldValue.increment(1)},
+        'chatType': 'direct',
+        'hiddenFor': FieldValue.arrayRemove([customMessage.sender.id]),
+      },
+      SetOptions(merge: true),
     );
 
+    // Commit batch
+    await batch.commit();
 
-    // 3. Update chat room metadata
-    await _updateChatRoomMetadata(chatRoomId, legacyMessage);
-
-    // 4. Send push notification to receiver
+    // Send notification
     await _sendNotificationToReceiver(receiverId, customMessage.message);
   }
 
-  //HELPER METHOD TO SEND MESSAGE TO FIRESTORE WITH CUSTOM DATA
-  Future<void> _sendMessageToFirestoreWithData(
-    Map<String, dynamic> messageData,
-    String receiverId,
-  ) async {
-    final senderId = messageData['senderId'] as String;
-    List<String> ids = [senderId, receiverId];
-    ids.sort();
-    String chatRoomId = ids.join("_");
-
-    // 1. Save message with custom data
-    await _firestore
-        .collection('chat_rooms')
-        .doc(chatRoomId)
-        .collection('messages')
-        .add(messageData);
-
-    // 2. Create a Message object for metadata update
-    final message = app_message.Message.fromMap(messageData);
-
-    // 3. Update chat room metadata
-    await _updateChatRoomMetadata(chatRoomId, message);
-
-    // 4. Send push notification to receiver
-    await _sendNotificationToReceiver(receiverId, message.message);
-  }
-
+  // SEND NOTIFICATION TO RECEIVER
   Future<void> _sendNotificationToReceiver(
-    String receiverId,
-    String message,
-  ) async {
+      String receiverId,
+      String message,
+      ) async {
     try {
-      // Get receiver tokens
-      DocumentSnapshot userDoc = await _firestore
-          .collection('users')
-          .doc(receiverId)
-          .get();
-
+      final userDoc = await _firestore.collection('users').doc(receiverId).get();
       if (!userDoc.exists) return;
 
-      List<dynamic> tokens = userDoc['fcmTokens'] ?? [];
+      final tokens = userDoc['fcmTokens'] as List<dynamic>? ?? [];
       if (tokens.isEmpty) return;
 
-      // FCM Server Key - Get this from Firebase Console > Project Settings > Cloud Messaging > Server Key
-      const String serverKey =
-          'YOUR_FCM_SERVER_KEY_HERE'; // Replace with actual server key
+      // Replace with your actual FCM server key from Firebase Console > Project Settings > Cloud Messaging
+      const String serverKey = 'YOUR_ACTUAL_FCM_SERVER_KEY'; // TODO: Replace this
 
-      for (String token in tokens) {
+      for (final token in tokens) {
         final response = await http.post(
           Uri.parse('https://fcm.googleapis.com/fcm/send'),
           headers: {
@@ -483,9 +576,7 @@ class ChatService extends ChangeNotifier {
             'to': token,
             'notification': {
               'title': 'New Message',
-              'body': message.length > 100
-                  ? '${message.substring(0, 100)}...'
-                  : message,
+              'body': message.length > 100 ? '${message.substring(0, 100)}...' : message,
               'sound': 'default',
               'badge': '1',
             },
@@ -506,47 +597,47 @@ class ChatService extends ChangeNotifier {
         }
       }
     } catch (e) {
-      debugPrint("Failed to send notification: $e");
+      debugPrint('Failed to send notification: $e');
     }
   }
 
-  //UPDATE CHAT ROOM METADATA
+  // UPDATE CHAT ROOM METADATA
   Future<void> _updateChatRoomMetadata(
-    String chatRoomId,
-    app_message.Message message, {
-    List<String>? members,
-  }) async {
+      String chatRoomId,
+      app_message.Message message, {
+        List<String>? members,
+      }) async {
     try {
+      final batch = _firestore.batch();
+      final chatRoomRef = _firestore.collection('chat_rooms').doc(chatRoomId);
+
       final metadata = {
         'members': members ?? [message.senderId, message.receiverId],
-        'lastMessage': message.toMap(),
-        'lastActivity': FieldValue.serverTimestamp(),
+        'lastMessage': message.message.isNotEmpty ? message.message : 'Attachment',
+        'lastMessageTime': FieldValue.serverTimestamp(),
+        'lastMessageSenderId': message.senderId,
         'messageCount': FieldValue.increment(1),
-        if (message.fileAttachment != null)
-          'fileCount': FieldValue.increment(1),
+        if (message.fileAttachment != null) 'fileCount': FieldValue.increment(1),
+        'hiddenFor': FieldValue.arrayRemove([message.senderId]),
       };
 
-      // For group chats, don't override existing group info
       if (members != null && members.length > 2) {
         metadata['memberCount'] = members.length;
         metadata['chatType'] = 'group';
       }
 
-      await _firestore
-          .collection('chat_rooms')
-          .doc(chatRoomId)
-          .set(metadata, SetOptions(merge: true));
+      batch.set(chatRoomRef, metadata, SetOptions(merge: true));
+      await batch.commit();
     } catch (e) {
-      // Don't throw error for metadata update failure
       debugPrint('Failed to update chat room metadata: $e');
     }
   }
 
-  //INCREMENT UNREAD COUNT FOR RECEIVER
+  // INCREMENT UNREAD COUNT FOR RECEIVER
   Future<void> _incrementUnreadCount(
-    String chatRoomId,
-    String receiverId,
-  ) async {
+      String chatRoomId,
+      String receiverId,
+      ) async {
     try {
       await _firestore.collection('chat_rooms').doc(chatRoomId).set({
         'unreadCount': {receiverId: FieldValue.increment(1)},
@@ -556,51 +647,68 @@ class ChatService extends ChangeNotifier {
     }
   }
 
-  //GET MESSAGES WITH ENHANCED PARSING
+  // GET MESSAGES WITH ENHANCED PARSING
+
   Stream<List<app_message.Message>> getMessagesStream(
       String userId,
       String otherUserId,
       ) {
-    List<String> ids = [userId, otherUserId];
-    ids.sort();
-    String chatRoomId = ids.join("_");
-
+    final chatRoomId = getChatRoomId(userId, otherUserId);
     return _firestore
         .collection('chat_rooms')
         .doc(chatRoomId)
         .collection('messages')
-        .orderBy('timestamp', descending: false)
+        .orderBy('timestamp', descending: true)
         .snapshots()
+        .debounceTime(Duration(milliseconds: 200))
         .map((snapshot) {
       return snapshot.docs.map((doc) {
-        Map<String, dynamic> docData = doc.data();
-        Map<String, dynamic> data = Map<String, dynamic>.from(docData);
+        final data = doc.data();
         data['id'] = doc.id;
-        // Handle legacy 'text' field
-        if (data['message'] == null && data['text'] != null) {
-          data['message'] = data['text'];
-        }
-        // Ensure required fields have fallbacks
-        data['senderId'] ??= 'unknown';
-        data['senderEmail'] ??= 'unknown@example.com';
+        // Set default values for missing fields
+        data['senderId'] ??= data['sender']?['id'] ?? 'unknown';
+        data['senderEmail'] ??= data['sender']?['name'] ?? 'unknown@example.com';
         data['receiverId'] ??= 'unknown';
         data['message'] ??= '';
         data['isRead'] ??= false;
         data['isEdited'] ??= false;
+        // Handle timestamp or createdAt
+        if (data['timestamp'] == null && data['createdAt'] != null) {
+          data['timestamp'] = data['createdAt'];
+        }
         data['timestamp'] ??= Timestamp.now();
+        // Handle type or customType
+        if (data['type'] == null && data['customType'] != null) {
+          data['type'] = data['customType'] == 'location'
+              ? app_message_type.MessageType.location.name
+              : data['customType'] == 'contact'
+              ? app_message_type.MessageType.contact.name
+              : app_message_type.MessageType.text.name;
+        }
         data['type'] ??= app_message_type.MessageType.text.name;
-        return app_message.Message.fromMap(data);
+        try {
+          return app_message.Message.fromMap(data);
+        } catch (e) {
+          debugPrint('Error parsing message: $e, Data: $data');
+          return app_message.Message(
+            id: doc.id,
+            senderId: 'unknown',
+            senderEmail: 'unknown@example.com',
+            receiverId: 'unknown',
+            message: 'Error loading message',
+            timestamp: Timestamp.now(),
+            type: app_message_type.MessageType.text,
+            isRead: false,
+            isEdited: false,
+          );
+        }
       }).toList();
     });
   }
 
-  //GET MESSAGES (Legacy - for backward compatibility)
+  // GET MESSAGES (Legacy)
   Stream<QuerySnapshot> getMessages(String userId, String otherUserId) {
-    //construct chat room id from user ids (sorted to ensure it matches the id used when sending messages)
-    List<String> ids = [userId, otherUserId];
-    ids.sort();
-    String chatRoomId = ids.join("_");
-
+    final chatRoomId = getChatRoomId(userId, otherUserId);
     return _firestore
         .collection('chat_rooms')
         .doc(chatRoomId)
@@ -609,14 +717,14 @@ class ChatService extends ChangeNotifier {
         .snapshots();
   }
 
-  //GET CHAT ROOM ID
+  // GET CHAT ROOM ID
   String getChatRoomId(String userId, String otherUserId) {
-    List<String> ids = [userId, otherUserId];
+    final ids = [userId, otherUserId];
     ids.sort();
     return ids.join("_");
   }
 
-  //SEARCH MESSAGES
+  // SEARCH MESSAGES
   Future<List<app_message.Message>> searchMessages({
     required String chatRoomId,
     required String query,
@@ -634,22 +742,23 @@ class ChatService extends ChangeNotifier {
         messagesQuery = messagesQuery.where('type', isEqualTo: type.name);
       }
 
-      QuerySnapshot snapshot = await messagesQuery.get();
+      final snapshot = await messagesQuery.get();
 
-      List<app_message.Message> messages = snapshot.docs
+      final messages = snapshot.docs
           .where((doc) => doc.data() != null)
-          .map(
-            (doc) =>
-                app_message.Message.fromMap(doc.data() as Map<String, dynamic>),
-          )
+          .map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        data['id'] = doc.id;
+        return app_message.Message.fromMap(data);
+      })
           .where(
             (message) =>
-                message.message.toLowerCase().contains(query.toLowerCase()) ||
-                (message.fileAttachment?.originalFileName
-                        .toLowerCase()
-                        .contains(query.toLowerCase()) ??
-                    false),
-          )
+        message.message.toLowerCase().contains(query.toLowerCase()) ||
+            (message.fileAttachment?.originalFileName
+                ?.toLowerCase()
+                .contains(query.toLowerCase()) ??
+                false),
+      )
           .toList();
 
       return messages;
@@ -658,11 +767,11 @@ class ChatService extends ChangeNotifier {
     }
   }
 
-  //GET UNREAD MESSAGE COUNT FOR A CHAT
+  // GET UNREAD MESSAGE COUNT
   Future<int> getUnreadMessageCount(
-    String chatRoomId,
-    String currentUserId,
-  ) async {
+      String chatRoomId,
+      String currentUserId,
+      ) async {
     try {
       final messages = await _firestore
           .collection('chat_rooms')
@@ -679,11 +788,11 @@ class ChatService extends ChangeNotifier {
     }
   }
 
-  //MARK MESSAGES AS READ
+  // MARK MESSAGES AS READ
   Future<void> markMessagesAsRead(
-    String chatRoomId,
-    String currentUserId,
-  ) async {
+      String chatRoomId,
+      String currentUserId,
+      ) async {
     try {
       final unreadMessages = await _firestore
           .collection('chat_rooms')
@@ -694,22 +803,22 @@ class ChatService extends ChangeNotifier {
           .get();
 
       final batch = _firestore.batch();
-      for (var doc in unreadMessages.docs) {
+      for (final doc in unreadMessages.docs) {
         batch.update(doc.reference, {'isRead': true});
       }
+      batch.set(
+        _firestore.collection('chat_rooms').doc(chatRoomId),
+        {'unreadCount': {currentUserId: 0}},
+        SetOptions(merge: true),
+      );
 
       await batch.commit();
-
-      // Reset unread count in parent chat room document
-      await _firestore.collection('chat_rooms').doc(chatRoomId).set({
-        'unreadCount': {currentUserId: 0},
-      }, SetOptions(merge: true));
     } catch (e) {
       debugPrint('Error marking messages as read: $e');
     }
   }
 
-  //GET FILES FROM CHAT
+  // GET CHAT FILES
   Future<List<FileAttachment>> getChatFiles({
     required String chatRoomId,
     app_message_type.MessageType? fileType,
@@ -726,14 +835,11 @@ class ChatService extends ChangeNotifier {
         messagesQuery = messagesQuery.where('type', isEqualTo: fileType.name);
       }
 
-      QuerySnapshot snapshot = await messagesQuery.get();
+      final snapshot = await messagesQuery.get();
 
-      List<FileAttachment> files = snapshot.docs
+      final files = snapshot.docs
           .where((doc) => doc.data() != null)
-          .map(
-            (doc) =>
-                app_message.Message.fromMap(doc.data() as Map<String, dynamic>),
-          )
+          .map((doc) => app_message.Message.fromMap(doc.data() as Map<String, dynamic>))
           .where((message) => message.fileAttachment != null)
           .map((message) => message.fileAttachment!)
           .toList();
@@ -744,7 +850,7 @@ class ChatService extends ChangeNotifier {
     }
   }
 
-  // 📬 Show local notification for new message
+  // SHOW LOCAL NOTIFICATION
   Future<void> showMessageNotification({
     required String senderName,
     required String message,
@@ -756,9 +862,7 @@ class ChatService extends ChangeNotifier {
       await NotificationService().showMessageNotification(
         chatRoomId: chatRoomId,
         senderName: senderName,
-        messageText: message.length > 100
-            ? '${message.substring(0, 100)}...'
-            : message,
+        messageText: message.length > 100 ? '${message.substring(0, 100)}...' : message,
         receiverId: receiverId,
         receiverEmail: receiverEmail,
       );

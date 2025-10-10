@@ -1648,13 +1648,13 @@ packages:
     source: hosted
     version: "1.0.7"
   rxdart:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: rxdart
-      sha256: "5c3004a4a8dbb94bd4bf5412a4def4acdaa12e12f269737a5751369e12d1a962"
+      sha256: "0c7c0cedd93788d996e33041ffecda924cc54389199cde4e6a34b440f50044cb"
       url: "https://pub.dev"
     source: hosted
-    version: "0.28.0"
+    version: "0.27.7"
   sentry:
     dependency: "direct main"
     description:
@@ -1864,10 +1864,10 @@ packages:
     dependency: "direct main"
     description:
       name: story_view
-      sha256: "9035dbdf7633a8491d5ea095dd5a64d794a66e887a2abd5d2b323d510f3e4e54"
+      sha256: ab64063569178e405b643ab11bdc28d6e85333191e3c8b5556e864fe6c5b2a5a
       url: "https://pub.dev"
     source: hosted
-    version: "0.16.6"
+    version: "0.16.5"
   stream_channel:
     dependency: transitive
     description:
