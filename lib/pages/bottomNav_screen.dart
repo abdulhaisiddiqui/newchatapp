@@ -2,6 +2,7 @@ import 'package:chatapp/pages/call_screen.dart';
 import 'package:chatapp/pages/contact_screen.dart';
 import 'package:chatapp/pages/home_page.dart';
 import 'package:chatapp/pages/setting_screen.dart';
+import 'package:chatapp/pages/setting_screen2.dart';
 import 'package:flutter/material.dart';
 
 import '../components/uihelper.dart';
@@ -19,7 +20,7 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
     HomePage(),
     CallScreen(),
     ContactScreen(),
-    SettingScreen(),
+    SettingScreen2(),
   ];
   @override
   Widget build(BuildContext context) {

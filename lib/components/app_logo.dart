@@ -79,12 +79,12 @@ class ModernAppIcon extends StatelessWidget {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF1976D2), Color(0xFF42A5F5), Color(0xFF64B5F6)],
+          colors: [Color(0XFF24786D), Color(0XFF24786D), Color(0XFF20A085)],
         ),
         borderRadius: BorderRadius.circular(size * 0.25),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF1976D2).withValues(alpha: 0.4),
+            color: const Color(0XFF24786D).withValues(alpha: 0.4),
             spreadRadius: 3,
             blurRadius: 15,
             offset: const Offset(0, 6),

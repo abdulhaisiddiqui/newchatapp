@@ -1,4 +1,4 @@
-import 'package:chatapp/components/my_button.dart';
+
 import 'package:chatapp/components/app_logo.dart';
 import 'package:chatapp/services/auth/auth_service.dart';
 import 'package:chatapp/services/secure_storage_service.dart';
@@ -98,7 +98,7 @@ class _SignInScreenState extends State<LoginPage> {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF1976D2)),
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -128,11 +128,11 @@ class _SignInScreenState extends State<LoginPage> {
 
                     // App Title
                     const Text(
-                      'Welcome Back',
+                      'Log in to ChatBox',
                       style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF1976D2),
+                        color: Colors.black,
                       ),
                     ),
 
@@ -140,10 +140,10 @@ class _SignInScreenState extends State<LoginPage> {
 
                     // Description Text
                     const Text(
-                      'Sign in to continue your conversations',
+                      'Welcome back! Sign in using your social account or email to continue us',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: 14,
                         color: Color(0xFF757575),
                         fontWeight: FontWeight.w400,
                       ),
@@ -165,20 +165,12 @@ class _SignInScreenState extends State<LoginPage> {
                         ),
                         const SizedBox(width: 16),
                         _buildSocialButton(
-                          icon: Image.asset(
-                            'assets/images/Apple_on.png',
-                            width: 24,
-                            height: 24,
-                          ),
-                          onPressed: () {},
+                          icon: Icon(Icons.apple,color: Colors.black,),
+                          onPressed: (){}
                         ),
                         const SizedBox(width: 16),
                         _buildSocialButton(
-                          icon: Image.asset(
-                            'assets/images/Facebook-f_Logo-Blue-Logo.wine.png',
-                            width: 24,
-                            height: 24,
-                          ),
+                          icon: Icon(Icons.facebook,color: Color(0xFF1976D2),),
                           onPressed: () {},
                         ),
                       ],
@@ -225,7 +217,7 @@ class _SignInScreenState extends State<LoginPage> {
                         hintText: 'Enter your email',
                         prefixIcon: const Icon(
                           Icons.email,
-                          color: Color(0xFF1976D2),
+                          color: Color(0XFF24786D),
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -253,7 +245,7 @@ class _SignInScreenState extends State<LoginPage> {
                         hintText: 'Enter your password',
                         prefixIcon: const Icon(
                           Icons.lock,
-                          color: Color(0xFF1976D2),
+                          color: Color(0XFF24786D),
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -279,13 +271,13 @@ class _SignInScreenState extends State<LoginPage> {
                       child: _isLoading
                           ? const Center(
                               child: CircularProgressIndicator(
-                                color: Color(0xFF1976D2),
+                                color: Color(0XFF24786D),
                               ),
                             )
                           : ElevatedButton(
                               onPressed: signIn,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF1976D2),
+                                backgroundColor: const Color(0XFF24786D),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
@@ -294,6 +286,7 @@ class _SignInScreenState extends State<LoginPage> {
                                 'Sign In',
                                 style: TextStyle(
                                   fontSize: 16,
+                                  color: Colors.white,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -308,7 +301,7 @@ class _SignInScreenState extends State<LoginPage> {
                       child: const Text(
                         'Forgot Password?',
                         style: TextStyle(
-                          color: Color(0xFF1976D2),
+                          color: Color(0XFF24786D),
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -331,7 +324,7 @@ class _SignInScreenState extends State<LoginPage> {
                             'Sign Up',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF1976D2),
+                              color: Color(0XFF24786D),
                             ),
                           ),
                         ),
