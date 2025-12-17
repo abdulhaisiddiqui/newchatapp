@@ -17,7 +17,11 @@ class ChatService extends ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   //SEND TEXT MESSAGES
-  Future<void> sendMessage(String receiverId, String message) async {
+  Future<void> sendMessage(
+    String receiverId,
+    String message, {
+    required String messageId,
+  }) async {
     await sendTextMessage(receiverId, message);
   }
 
@@ -87,6 +91,7 @@ class ChatService extends ChangeNotifier {
       timestamp: timestamp,
       type: app_message_type.MessageType.text,
       isRead: false, // New messages are unread by default
+      isEdited: false,
     );
 
     await _sendMessageToFirestore(newMessage, receiverId);
@@ -188,6 +193,7 @@ class ChatService extends ChangeNotifier {
       type: app_message_type.MessageType.fromMimeType(fileAttachment.mimeType),
       fileAttachment: fileAttachment,
       isRead: false, // New messages are unread by default
+      isEdited: false,
     );
 
     await _sendMessageToFirestore(newMessage, receiverId);
@@ -200,6 +206,7 @@ class ChatService extends ChangeNotifier {
     required String replyToMessageId,
     app_message_type.MessageType type = app_message_type.MessageType.text,
     FileAttachment? fileAttachment,
+    required String messageId,
   }) async {
     //get current user info
     final currentUser = _firebaseAuth.currentUser;
@@ -221,6 +228,7 @@ class ChatService extends ChangeNotifier {
       fileAttachment: fileAttachment,
       replyToMessageId: replyToMessageId,
       isRead: false, // New messages are unread by default
+      isEdited: false,
     );
 
     await _sendMessageToFirestore(newMessage, receiverId);
@@ -392,6 +400,7 @@ class ChatService extends ChangeNotifier {
       timestamp: Timestamp.fromDate(customMessage.createdAt),
       type: app_message_type.MessageType.text,
       isRead: false,
+      isEdited: false,
     );
 
     // 3. Update chat room metadata
@@ -492,7 +501,9 @@ class ChatService extends ChangeNotifier {
             debugPrint('✗ Failed to send push notification: ${response.body}');
           }
         } catch (tokenError) {
-          debugPrint('✗ Error sending notification to token $token: $tokenError');
+          debugPrint(
+            '✗ Error sending notification to token $token: $tokenError',
+          );
         }
       }
     } catch (e) {

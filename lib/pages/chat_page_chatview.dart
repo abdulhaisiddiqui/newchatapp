@@ -617,15 +617,6 @@ class _ChatPageChatViewState extends State<ChatPageChatView> {
 
     setState(() => _isSendingMessage = true);
 
-    final newMessage = Message(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      message: message,
-      createdAt: DateTime.now(),
-      sentBy: currentUser.id,
-      messageType: messageType,
-      replyMessage: replyMessage,
-    );
-
     debugPrint(
       '📤 Sending message to ${widget.receiverUserEmail} (ID: ${widget.receiverUserId})',
     );
@@ -642,6 +633,7 @@ class _ChatPageChatViewState extends State<ChatPageChatView> {
             receiverId: widget.receiverUserId,
             message: message,
             replyToMessageId: replyMessage.messageId,
+            messageId: DateTime.now().millisecondsSinceEpoch.toString(),
           )
           .then((_) {
             setState(() => _isSendingMessage = false);
@@ -656,7 +648,11 @@ class _ChatPageChatViewState extends State<ChatPageChatView> {
       // Regular message
       debugPrint('💬 Sending regular text message');
       _chatService
-          .sendMessage(widget.receiverUserId, message)
+          .sendMessage(
+            widget.receiverUserId,
+            message,
+            messageId: DateTime.now().millisecondsSinceEpoch.toString(),
+          )
           .then((_) {
             setState(() => _isSendingMessage = false);
             debugPrint(

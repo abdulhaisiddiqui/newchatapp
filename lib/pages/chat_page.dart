@@ -1,5 +1,4 @@
 import 'package:awesome_notifications/awesome_notifications.dart';
-import 'package:chatapp/components/chat_bubble.dart';
 import 'package:chatapp/components/call/call_screen_widget.dart';
 import 'package:chatapp/components/voice_recorder.dart';
 import 'package:chatapp/pages/location_share_page.dart';
@@ -26,8 +25,6 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
-import 'package:flutter_image_compress/flutter_image_compress.dart';
-
 
 class ChatPage extends StatefulWidget {
   final String receiverUserEmail;
@@ -55,17 +52,15 @@ class _ChatPageState extends State<ChatPage> {
 
   bool _isUploading = false;
   double _uploadProgress = 0.0;
-  String? _statusMessage;
   bool _isTyping = false;
   Timer? _typingTimer;
   Message? _replyToMessage;
-  Map<String, String> _messageReactions = {};
-  List<String> _chatImageUrls = [];
-  Set<String> _notifiedMessageIds = {};
-  List<Message> _cachedMessages = [];
+  final Map<String, String> _messageReactions = {};
+  final List<String> _chatImageUrls = [];
+  final Set<String> _notifiedMessageIds = {};
+  final List<Message> _cachedMessages = [];
 
-  List<Message> _localMessages = [];
-
+  final List<Message> _localMessages = [];
 
   // void _showErrorSnackBar(String message) {
   //   ScaffoldMessenger.of(context).showSnackBar(
@@ -84,7 +79,8 @@ class _ChatPageState extends State<ChatPage> {
         await _chatService.sendReplyMessage(
           receiverId: widget.receiverUserId,
           message: _messageController.text,
-          replyToMessageId: _replyToMessage!.timestamp.millisecondsSinceEpoch.toString(),
+          replyToMessageId: _replyToMessage!.timestamp.millisecondsSinceEpoch
+              .toString(),
           messageId: messageId,
         );
       } else {
@@ -125,10 +121,17 @@ class _ChatPageState extends State<ChatPage> {
       for (File file in files) {
         File uploadFile = file;
         final startTime = DateTime.now();
-        debugPrint('Original file size: ${await file.length() / 1024 / 1024} MB');
+        debugPrint(
+          'Original file size: ${await file.length() / 1024 / 1024} MB',
+        );
 
-        if (file.path.endsWith('.jpg') || file.path.endsWith('.jpeg') || file.path.endsWith('.png')) {
-          final compressedPath = file.path.replaceAll(RegExp(r'\.\w+$'), '_compressed.jpg');
+        if (file.path.endsWith('.jpg') ||
+            file.path.endsWith('.jpeg') ||
+            file.path.endsWith('.png')) {
+          final compressedPath = file.path.replaceAll(
+            RegExp(r'\.\w+$'),
+            '_compressed.jpg',
+          );
           final compressedFile = await FlutterImageCompress.compressAndGetFile(
             file.path,
             compressedPath,
@@ -138,19 +141,24 @@ class _ChatPageState extends State<ChatPage> {
           );
           if (compressedFile != null) {
             uploadFile = File(compressedFile.path);
-            debugPrint('Compressed file size: ${await uploadFile.length() / 1024 / 1024} MB');
+            debugPrint(
+              'Compressed file size: ${await uploadFile.length() / 1024 / 1024} MB',
+            );
           }
         }
 
         final tempMessageId = DateTime.now().millisecondsSinceEpoch.toString();
-        final String fileExtension = path.extension(uploadFile.path).toLowerCase();
+        final String fileExtension = path
+            .extension(uploadFile.path)
+            .toLowerCase();
         final tempMessage = Message(
           id: tempMessageId,
           senderId: _firebaseAuth.currentUser!.uid,
-          senderEmail: _firebaseAuth.currentUser!.email ?? 'unknown@example.com',
+          senderEmail:
+              _firebaseAuth.currentUser!.email ?? 'unknown@example.com',
           receiverId: widget.receiverUserId,
           message: '',
-          isEdited: true,
+          isEdited: false,
           timestamp: Timestamp.now(),
           type: MessageType.image,
           fileAttachment: FileAttachment(
@@ -194,9 +202,13 @@ class _ChatPageState extends State<ChatPage> {
           },
         );
 
-        debugPrint('Upload completed in ${DateTime.now().difference(startTime).inMilliseconds} ms');
+        debugPrint(
+          'Upload completed in ${DateTime.now().difference(startTime).inMilliseconds} ms',
+        );
 
-        if (result.isSuccess && result.fileId != null && result.downloadUrl != null) {
+        if (result.isSuccess &&
+            result.fileId != null &&
+            result.downloadUrl != null) {
           final fileAttachment = FileAttachment(
             fileId: result.fileId!,
             fileName: uploadFile.path.split('/').last,
@@ -212,8 +224,9 @@ class _ChatPageState extends State<ChatPage> {
           await _chatService.sendFileMessage(
             receiverId: widget.receiverUserId,
             fileAttachment: fileAttachment,
-            textMessage: _messageController.text.isNotEmpty ? _messageController.text : '',
-            messageId: tempMessageId,
+            textMessage: _messageController.text.isNotEmpty
+                ? _messageController.text
+                : '',
           );
           if (_messageController.text.isNotEmpty) {
             _messageController.clear();
@@ -248,10 +261,10 @@ class _ChatPageState extends State<ChatPage> {
         duration: const Duration(seconds: 4),
         action: onRetry != null
             ? SnackBarAction(
-          label: 'Retry',
-          textColor: Colors.white,
-          onPressed: onRetry,
-        )
+                label: 'Retry',
+                textColor: Colors.white,
+                onPressed: onRetry,
+              )
             : null,
       ),
     );
@@ -395,7 +408,7 @@ class _ChatPageState extends State<ChatPage> {
       senderEmail: _firebaseAuth.currentUser!.email ?? 'unknown@example.com',
       receiverId: widget.receiverUserId,
       message: '',
-      isEdited: true,
+      isEdited: false,
       timestamp: Timestamp.now(),
       type: MessageType.audio,
       fileAttachment: FileAttachment(
@@ -416,7 +429,6 @@ class _ChatPageState extends State<ChatPage> {
     setState(() {
       _isUploading = true;
       _uploadProgress = 0.0;
-      _statusMessage = 'Uploading voice message...';
       _localMessages.add(tempMessage);
       _cachedMessages.add(tempMessage);
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -440,22 +452,25 @@ class _ChatPageState extends State<ChatPage> {
           setState(() => _uploadProgress = progress);
         },
         onStatusUpdate: (status) {
-          setState(() => _statusMessage = status);
+          debugPrint('Upload status: $status');
         },
       );
 
       if (result.isSuccess && result.fileId != null) {
-        final fileAttachment = await _fileService.getFileMetadata(result.fileId!);
+        final fileAttachment = await _fileService.getFileMetadata(
+          result.fileId!,
+        );
         if (fileAttachment != null) {
           await _chatService.sendFileMessage(
             receiverId: widget.receiverUserId,
             fileAttachment: fileAttachment,
             textMessage: '',
-            messageId: messageId,
           );
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Voice message sent successfully')),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Voice message sent successfully')),
+            );
+          }
           setState(() {
             _localMessages.removeWhere((m) => m.id == messageId);
             _cachedMessages.removeWhere((m) => m.id == messageId);
@@ -476,7 +491,6 @@ class _ChatPageState extends State<ChatPage> {
       setState(() {
         _isUploading = false;
         _uploadProgress = 0.0;
-        _statusMessage = null;
       });
       if (File(audioPath).existsSync()) {
         await File(audioPath).delete();
@@ -514,10 +528,15 @@ class _ChatPageState extends State<ChatPage> {
   Future<void> _startAudioCall() async {
     try {
       if (!await _checkMicrophonePermission()) {
-        _showPermissionDeniedDialog('Microphone permission is required for audio calls');
+        _showPermissionDeniedDialog(
+          'Microphone permission is required for audio calls',
+        );
         return;
       }
-      final success = await _callManager.startAudioCall(widget.receiverUserId, widget.receiverUserEmail);
+      final success = await _callManager.startAudioCall(
+        widget.receiverUserId,
+        widget.receiverUserEmail,
+      );
       if (success) {
         _showCallScreen();
       } else {
@@ -530,11 +549,17 @@ class _ChatPageState extends State<ChatPage> {
 
   Future<void> _startVideoCall() async {
     try {
-      if (!await _checkCameraPermission() || !await _checkMicrophonePermission()) {
-        _showPermissionDeniedDialog('Camera and microphone permissions are required for video calls');
+      if (!await _checkCameraPermission() ||
+          !await _checkMicrophonePermission()) {
+        _showPermissionDeniedDialog(
+          'Camera and microphone permissions are required for video calls',
+        );
         return;
       }
-      final success = await _callManager.startVideoCall(widget.receiverUserId, widget.receiverUserEmail);
+      final success = await _callManager.startVideoCall(
+        widget.receiverUserId,
+        widget.receiverUserEmail,
+      );
       if (success) {
         _showCallScreen();
       } else {
@@ -616,7 +641,10 @@ class _ChatPageState extends State<ChatPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Add Reaction', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const Text(
+              'Add Reaction',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -646,7 +674,8 @@ class _ChatPageState extends State<ChatPage> {
 
     if (selectedReaction != null) {
       setState(() {
-        _messageReactions[message.timestamp.millisecondsSinceEpoch.toString()] = selectedReaction;
+        _messageReactions[message.timestamp.millisecondsSinceEpoch.toString()] =
+            selectedReaction;
       });
     }
   }
@@ -688,16 +717,16 @@ class _ChatPageState extends State<ChatPage> {
         final name = result['name'] as String?;
         final phone = result['phone'] as String?;
         if (name != null && phone != null) {
-          final messageId = DateTime.now().millisecondsSinceEpoch.toString();
           await _chatService.sendContactMessage(
             receiverId: widget.receiverUserId,
             contactName: name,
             contactPhone: phone,
-            messageId: messageId,
           );
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Contact shared successfully')),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Contact shared successfully')),
+            );
+          }
         }
       } catch (e) {
         _showErrorSnackBar('Failed to share contact: $e');
@@ -715,18 +744,19 @@ class _ChatPageState extends State<ChatPage> {
       try {
         final latitude = result['latitude'] as double;
         final longitude = result['longitude'] as double;
-        final googleMapsUrl = "https://www.google.com/maps/search/?api=1&query=$latitude,$longitude";
-        final messageId = DateTime.now().millisecondsSinceEpoch.toString();
+        final googleMapsUrl =
+            "https://www.google.com/maps/search/?api=1&query=$latitude,$longitude";
         await _chatService.sendLocationMessage(
           receiverId: widget.receiverUserId,
           latitude: latitude,
           longitude: longitude,
           mapsUrl: googleMapsUrl,
-          messageId: messageId,
         );
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Location shared successfully')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location shared successfully')),
+          );
+        }
       } catch (e) {
         _showErrorSnackBar('Failed to share location: $e');
       }
@@ -765,7 +795,9 @@ class _ChatPageState extends State<ChatPage> {
 
   void _clearNotificationsAndMarkAsRead() async {
     final chatRoomId = _getChatRoomId();
-    await AwesomeNotifications().dismissNotificationsByGroupKey('chat_$chatRoomId');
+    await AwesomeNotifications().dismissNotificationsByGroupKey(
+      'chat_$chatRoomId',
+    );
     await _chatService.markMessagesAsRead(chatRoomId, widget.receiverUserId);
   }
 
@@ -792,7 +824,10 @@ class _ChatPageState extends State<ChatPage> {
               onPressed: () => Navigator.pop(context),
             ),
             FutureBuilder<DocumentSnapshot>(
-              future: FirebaseFirestore.instance.collection('users').doc(widget.receiverUserId).get(),
+              future: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(widget.receiverUserId)
+                  .get(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const CircleAvatar(
@@ -818,7 +853,8 @@ class _ChatPageState extends State<ChatPage> {
                         CircleAvatar(
                           backgroundImage: profilePic.isNotEmpty
                               ? NetworkImage(profilePic)
-                              : const AssetImage('assets/images/user.png') as ImageProvider,
+                              : const AssetImage('assets/images/user.png')
+                                    as ImageProvider,
                           radius: 20,
                         ),
                         Positioned(
@@ -886,7 +922,10 @@ class _ChatPageState extends State<ChatPage> {
                     'assets/images/m-Call.svg',
                     width: 24,
                     height: 24,
-                    color: Colors.black,
+                    colorFilter: const ColorFilter.mode(
+                      Colors.black,
+                      BlendMode.srcIn,
+                    ),
                   ),
                   onPressed: _startAudioCall,
                 ),
@@ -895,7 +934,10 @@ class _ChatPageState extends State<ChatPage> {
                     'assets/images/Video.svg',
                     width: 24,
                     height: 24,
-                    color: Colors.black,
+                    colorFilter: const ColorFilter.mode(
+                      Colors.black,
+                      BlendMode.srcIn,
+                    ),
                   ),
                   onPressed: _startVideoCall,
                 ),
@@ -929,7 +971,9 @@ class _ChatPageState extends State<ChatPage> {
                           ),
                         ),
                         Text(
-                          _replyToMessage!.message.isNotEmpty ? _replyToMessage!.message : 'Attachment',
+                          _replyToMessage!.message.isNotEmpty
+                              ? _replyToMessage!.message
+                              : 'Attachment',
                           style: const TextStyle(fontSize: 14),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -954,10 +998,15 @@ class _ChatPageState extends State<ChatPage> {
             onCameraPressed: () async {
               try {
                 if (!await _checkCameraPermission()) {
-                  _showPermissionDeniedDialog('Camera permission is required to take photos');
+                  _showPermissionDeniedDialog(
+                    'Camera permission is required to take photos',
+                  );
                   return;
                 }
-                final XFile? image = await _imagePicker.pickImage(source: ImageSource.camera, imageQuality: 85);
+                final XFile? image = await _imagePicker.pickImage(
+                  source: ImageSource.camera,
+                  imageQuality: 85,
+                );
                 if (image != null) {
                   _handleFileSelection([File(image.path)]);
                 }
@@ -967,7 +1016,10 @@ class _ChatPageState extends State<ChatPage> {
             },
             onGalleryPressed: () async {
               try {
-                final XFile? image = await _imagePicker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+                final XFile? image = await _imagePicker.pickImage(
+                  source: ImageSource.gallery,
+                  imageQuality: 85,
+                );
                 if (image != null) {
                   _handleFileSelection([File(image.path)]);
                 }
@@ -983,13 +1035,21 @@ class _ChatPageState extends State<ChatPage> {
                     status = await Permission.storage.request();
                   }
                   if (!status.isGranted) {
-                    _showPermissionDeniedDialog('Storage permission is required to select documents');
+                    _showPermissionDeniedDialog(
+                      'Storage permission is required to select documents',
+                    );
                     return;
                   }
                 }
-                FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.any, allowMultiple: true);
+                FilePickerResult? result = await FilePicker.platform.pickFiles(
+                  type: FileType.any,
+                  allowMultiple: true,
+                );
                 if (result != null) {
-                  List<File> files = result.paths.where((path) => path != null).map((path) => File(path!)).toList();
+                  List<File> files = result.paths
+                      .where((path) => path != null)
+                      .map((path) => File(path!))
+                      .toList();
                   _handleFileSelection(files);
                 }
               } catch (e) {
@@ -1048,7 +1108,8 @@ class _ChatPageState extends State<ChatPage> {
             builder: (context, snapshot) {
               final messages = snapshot.data ?? [];
 
-              if (snapshot.connectionState == ConnectionState.waiting && messages.isEmpty) {
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  messages.isEmpty) {
                 debugPrint('StreamBuilder: Waiting for data');
                 return const Center(child: CircularProgressIndicator());
               }
@@ -1078,7 +1139,11 @@ class _ChatPageState extends State<ChatPage> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.chat_bubble_outline, size: 48, color: Colors.grey),
+                      Icon(
+                        Icons.chat_bubble_outline,
+                        size: 48,
+                        color: Colors.grey,
+                      ),
                       SizedBox(height: 16),
                       Text('No messages yet'),
                       SizedBox(height: 8),
@@ -1090,7 +1155,8 @@ class _ChatPageState extends State<ChatPage> {
 
               if (messages.isNotEmpty) {
                 final latestMessage = messages.first;
-                final messageId = latestMessage.timestamp.millisecondsSinceEpoch.toString();
+                final messageId = latestMessage.timestamp.millisecondsSinceEpoch
+                    .toString();
                 if (latestMessage.senderId != currentUser.uid &&
                     !latestMessage.isRead &&
                     !_notifiedMessageIds.contains(messageId)) {
@@ -1114,7 +1180,10 @@ class _ChatPageState extends State<ChatPage> {
                   if (index == messages.length) {
                     return Center(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFFF8FBFA),
                           borderRadius: BorderRadius.circular(20),
@@ -1180,47 +1249,58 @@ class _ChatPageState extends State<ChatPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  if (message.fileAttachment != null && message.fileAttachment!.downloadUrl.isNotEmpty)
+                  if (message.fileAttachment != null &&
+                      message.fileAttachment!.downloadUrl.isNotEmpty)
                     ClipRRect(
                       borderRadius: BorderRadius.circular(10),
-                      child: message.fileAttachment!.downloadUrl.startsWith('file://') ||
-                          message.fileAttachment!.downloadUrl.contains('/cache/')
+                      child:
+                          message.fileAttachment!.downloadUrl.startsWith(
+                                'file://',
+                              ) ||
+                              message.fileAttachment!.downloadUrl.contains(
+                                '/cache/',
+                              )
                           ? Image.file(
-                        File(message.fileAttachment!.downloadUrl),
-                        width: 160,
-                        height: 160,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          debugPrint('Local image load error: $error');
-                          return const Icon(
-                            Icons.broken_image,
-                            size: 50,
-                            color: Colors.grey,
-                          );
-                        },
-                      )
+                              File(message.fileAttachment!.downloadUrl),
+                              width: 160,
+                              height: 160,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                debugPrint('Local image load error: $error');
+                                return const Icon(
+                                  Icons.broken_image,
+                                  size: 50,
+                                  color: Colors.grey,
+                                );
+                              },
+                            )
                           : Image.network(
-                        message.fileAttachment!.downloadUrl,
-                        width: 160,
-                        height: 160,
-                        fit: BoxFit.cover,
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return const SizedBox(
-                            width: 40,
-                            height: 40,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          );
-                        },
-                        errorBuilder: (context, error, stackTrace) {
-                          debugPrint('Image load error: $error, URL: ${message.fileAttachment!.downloadUrl}');
-                          return const Icon(
-                            Icons.broken_image,
-                            size: 50,
-                            color: Colors.grey,
-                          );
-                        },
-                      ),
+                              message.fileAttachment!.downloadUrl,
+                              width: 160,
+                              height: 160,
+                              fit: BoxFit.cover,
+                              loadingBuilder:
+                                  (context, child, loadingProgress) {
+                                    if (loadingProgress == null) return child;
+                                    return const SizedBox(
+                                      width: 40,
+                                      height: 40,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    );
+                                  },
+                              errorBuilder: (context, error, stackTrace) {
+                                debugPrint(
+                                  'Image load error: $error, URL: ${message.fileAttachment!.downloadUrl}',
+                                );
+                                return const Icon(
+                                  Icons.broken_image,
+                                  size: 50,
+                                  color: Colors.grey,
+                                );
+                              },
+                            ),
                     )
                   else if (message.type == MessageType.audio)
                     Row(
@@ -1237,28 +1317,31 @@ class _ChatPageState extends State<ChatPage> {
                       ],
                     )
                   else if (message.type == MessageType.contact)
-                      Text(
-                        'Contact: ${message.message}',
-                        style: const TextStyle(color: Colors.white, fontSize: 16),
-                      )
-                    else if (message.type == MessageType.location)
-                        Text(
-                          'Location: ${message.message}',
-                          style: const TextStyle(color: Colors.white, fontSize: 16),
-                        )
-                      else
-                        Text(
-                          message.message,
-                          style: const TextStyle(color: Colors.white, fontSize: 16),
-                        ),
+                    Text(
+                      'Contact: ${message.message}',
+                      style: const TextStyle(color: Colors.white, fontSize: 16),
+                    )
+                  else if (message.type == MessageType.location)
+                    Text(
+                      'Location: ${message.message}',
+                      style: const TextStyle(color: Colors.white, fontSize: 16),
+                    )
+                  else
+                    Text(
+                      message.message,
+                      style: const TextStyle(color: Colors.white, fontSize: 16),
+                    ),
                   const SizedBox(height: 4),
                   Text(
                     _formatTimestamp(message.timestamp.toDate()),
                     style: const TextStyle(color: Colors.white70, fontSize: 10),
                   ),
-                  if (_messageReactions.containsKey(message.timestamp.millisecondsSinceEpoch.toString()))
+                  if (_messageReactions.containsKey(
+                    message.timestamp.millisecondsSinceEpoch.toString(),
+                  ))
                     Text(
-                      _messageReactions[message.timestamp.millisecondsSinceEpoch.toString()]!,
+                      _messageReactions[message.timestamp.millisecondsSinceEpoch
+                          .toString()]!,
                       style: const TextStyle(fontSize: 16),
                     ),
                 ],
@@ -1271,7 +1354,7 @@ class _ChatPageState extends State<ChatPage> {
             CircularProgressIndicator(
               value: _uploadProgress,
               strokeWidth: 2,
-              backgroundColor: Colors.white.withOpacity(0.5),
+              backgroundColor: Colors.white.withValues(alpha: 0.5),
             ),
         ],
       ),
@@ -1306,7 +1389,8 @@ class _ChatPageState extends State<ChatPage> {
               radius: 18,
               backgroundImage: profilePic != null && profilePic != ''
                   ? NetworkImage(profilePic)
-                  : const AssetImage('assets/default_avatar.png') as ImageProvider,
+                  : const AssetImage('assets/default_avatar.png')
+                        as ImageProvider,
             );
           },
         ),
@@ -1331,7 +1415,8 @@ class _ChatPageState extends State<ChatPage> {
                       ),
                     );
                   }
-                  final userData = snapshot.data!.data() as Map<String, dynamic>;
+                  final userData =
+                      snapshot.data!.data() as Map<String, dynamic>;
                   return Text(
                     userData['username'] ?? 'Unknown',
                     style: const TextStyle(
@@ -1363,9 +1448,12 @@ class _ChatPageState extends State<ChatPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (message.fileAttachment != null && message.fileAttachment!.downloadUrl.isNotEmpty)
+                      if (message.fileAttachment != null &&
+                          message.fileAttachment!.downloadUrl.isNotEmpty)
                         GestureDetector(
-                          onTap: () => _openImageViewer(message.fileAttachment!.downloadUrl),
+                          onTap: () => _openImageViewer(
+                            message.fileAttachment!.downloadUrl,
+                          ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(10),
                             child: Image.network(
@@ -1373,19 +1461,23 @@ class _ChatPageState extends State<ChatPage> {
                               width: 160,
                               height: 160,
                               fit: BoxFit.cover,
-                              loadingBuilder: (context, child, loadingProgress) {
-                                if (loadingProgress == null) return child;
-                                return const SizedBox(
-                                  width: 40,
-                                  height: 40,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                );
-                              },
-                              errorBuilder: (context, error, stackTrace) => const Icon(
-                                Icons.broken_image,
-                                size: 50,
-                                color: Colors.grey,
-                              ),
+                              loadingBuilder:
+                                  (context, child, loadingProgress) {
+                                    if (loadingProgress == null) return child;
+                                    return const SizedBox(
+                                      width: 40,
+                                      height: 40,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    );
+                                  },
+                              errorBuilder: (context, error, stackTrace) =>
+                                  const Icon(
+                                    Icons.broken_image,
+                                    size: 50,
+                                    color: Colors.grey,
+                                  ),
                             ),
                           ),
                         )
@@ -1398,34 +1490,43 @@ class _ChatPageState extends State<ChatPage> {
                             const Icon(Icons.graphic_eq, color: Colors.black),
                             const SizedBox(width: 8),
                             Text(
-                              message.fileAttachment?.fileName ?? "Voice message",
+                              message.fileAttachment?.fileName ??
+                                  "Voice message",
                               style: const TextStyle(color: Colors.black),
                             ),
                           ],
                         )
                       else if (message.type == MessageType.contact)
-                          Text(
-                            'Contact: ${message.message}',
-                            style: const TextStyle(fontSize: 14),
-                          )
-                        else if (message.type == MessageType.location)
-                            Text(
-                              'Location: ${message.message}',
-                              style: const TextStyle(fontSize: 14),
-                            )
-                          else
-                            Text(
-                              message.message,
-                              style: const TextStyle(fontSize: 14),
-                            ),
+                        Text(
+                          'Contact: ${message.message}',
+                          style: const TextStyle(fontSize: 14),
+                        )
+                      else if (message.type == MessageType.location)
+                        Text(
+                          'Location: ${message.message}',
+                          style: const TextStyle(fontSize: 14),
+                        )
+                      else
+                        Text(
+                          message.message,
+                          style: const TextStyle(fontSize: 14),
+                        ),
                       const SizedBox(height: 4),
                       Text(
                         _formatTimestamp(message.timestamp.toDate()),
-                        style: const TextStyle(color: Colors.black54, fontSize: 10),
+                        style: const TextStyle(
+                          color: Colors.black54,
+                          fontSize: 10,
+                        ),
                       ),
-                      if (_messageReactions.containsKey(message.timestamp.millisecondsSinceEpoch.toString()))
+                      if (_messageReactions.containsKey(
+                        message.timestamp.millisecondsSinceEpoch.toString(),
+                      ))
                         Text(
-                          _messageReactions[message.timestamp.millisecondsSinceEpoch.toString()]!,
+                          _messageReactions[message
+                              .timestamp
+                              .millisecondsSinceEpoch
+                              .toString()]!,
                           style: const TextStyle(fontSize: 16),
                         ),
                     ],
@@ -1438,29 +1539,7 @@ class _ChatPageState extends State<ChatPage> {
       ],
     );
   }
-
-  void _downloadFile(fileAttachment) async {
-    try {
-      final result = await _fileService.downloadFile(
-        downloadUrl: fileAttachment.downloadUrl,
-        fileName: fileAttachment.fileName,
-      );
-      if (result.isSuccess) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Downloaded ${fileAttachment.originalFileName}'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      } else {
-        _showErrorSnackBar('Download failed: ${result.error}');
-      }
-    } catch (e) {
-      _showErrorSnackBar('Download error: $e');
-    }
-  }
 }
-
 
 class ChatInputBar extends StatefulWidget {
   final TextEditingController messageController;
@@ -1478,7 +1557,7 @@ class ChatInputBar extends StatefulWidget {
   final bool isWeb;
 
   const ChatInputBar({
-    Key? key,
+    super.key,
     required this.messageController,
     required this.onSendMessage,
     required this.onFilesSelected,
@@ -1492,13 +1571,14 @@ class ChatInputBar extends StatefulWidget {
     this.isUploading = false,
     this.uploadProgress = 0.0,
     this.isWeb = false,
-  }) : super(key: key);
+  });
 
   @override
   State<ChatInputBar> createState() => _ChatInputBarState();
 }
 
-class _ChatInputBarState extends State<ChatInputBar> with SingleTickerProviderStateMixin {
+class _ChatInputBarState extends State<ChatInputBar>
+    with SingleTickerProviderStateMixin {
   bool _hasText = false;
   bool _isRecording = false;
   late AnimationController _micController;
@@ -1512,8 +1592,10 @@ class _ChatInputBarState extends State<ChatInputBar> with SingleTickerProviderSt
       vsync: this,
       duration: const Duration(milliseconds: 200),
     );
-    _micScaleAnimation = Tween<double>(begin: 1.0, end: 1.2)
-        .animate(CurvedAnimation(parent: _micController, curve: Curves.easeInOut));
+    _micScaleAnimation = Tween<double>(
+      begin: 1.0,
+      end: 1.2,
+    ).animate(CurvedAnimation(parent: _micController, curve: Curves.easeInOut));
   }
 
   void _onTextChanged() {
@@ -1558,8 +1640,13 @@ class _ChatInputBarState extends State<ChatInputBar> with SingleTickerProviderSt
         if (!micStatus.isGranted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: const Text('Microphone permission is required for voice messages'),
-              action: SnackBarAction(label: 'Settings', onPressed: openAppSettings),
+              content: const Text(
+                'Microphone permission is required for voice messages',
+              ),
+              action: SnackBarAction(
+                label: 'Settings',
+                onPressed: openAppSettings,
+              ),
             ),
           );
           return;
@@ -1573,15 +1660,10 @@ class _ChatInputBarState extends State<ChatInputBar> with SingleTickerProviderSt
       widget.onVoiceRecordStart?.call();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Voice recording is not supported on web')),
+        const SnackBar(
+          content: Text('Voice recording is not supported on web'),
+        ),
       );
-    }
-  }
-
-  void _handleMicRelease() {
-    if (_isRecording) {
-      setState(() => _isRecording = false);
-      _micController.reverse();
     }
   }
 
@@ -1610,7 +1692,11 @@ class _ChatInputBarState extends State<ChatInputBar> with SingleTickerProviderSt
             children: [
               IconButton(
                 onPressed: _showAttachmentMenu,
-                icon: const Icon(Icons.attach_file, color: Colors.black, size: 24),
+                icon: const Icon(
+                  Icons.attach_file,
+                  color: Colors.black,
+                  size: 24,
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -1644,7 +1730,12 @@ class _ChatInputBarState extends State<ChatInputBar> with SingleTickerProviderSt
               ),
               const SizedBox(width: 10),
               IconButton(
-                icon: const Icon(Icons.photo_camera_outlined, color: Colors.black, weight: 600, size: 24),
+                icon: const Icon(
+                  Icons.photo_camera_outlined,
+                  color: Colors.black,
+                  weight: 600,
+                  size: 24,
+                ),
                 onPressed: widget.onCameraPressed,
               ),
               const SizedBox(width: 10),
@@ -1655,58 +1746,69 @@ class _ChatInputBarState extends State<ChatInputBar> with SingleTickerProviderSt
                 },
                 child: _hasText
                     ? Material(
-                  key: const ValueKey('send'),
-                  color: const Color(0xFF128C7E),
-                  shape: const CircleBorder(),
-                  child: InkWell(
-                    onTap: widget.isUploading ? null : widget.onSendMessage,
-                    customBorder: const CircleBorder(),
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      child: Icon(Icons.send, color: Colors.white, size: 22),
-                    ),
-                  ),
-                )
-                    : Stack(
-                  alignment: Alignment.center,
-                  key: const ValueKey('mic'),
-                  children: [
-                    ScaleTransition(
-                      scale: _micScaleAnimation,
-                      child: Material(
-                        color: _isRecording ? Colors.red : const Color(0xFF128C7E),
+                        key: const ValueKey('send'),
+                        color: const Color(0xFF128C7E),
                         shape: const CircleBorder(),
                         child: InkWell(
-                          onTapDown: (_) => _handleMicPress(),
+                          onTap: widget.isUploading
+                              ? null
+                              : widget.onSendMessage,
                           customBorder: const CircleBorder(),
                           child: Container(
                             padding: const EdgeInsets.all(12),
                             child: Icon(
-                              _isRecording ? Icons.mic : Icons.mic_none,
+                              Icons.send,
                               color: Colors.white,
                               size: 22,
                             ),
                           ),
                         ),
+                      )
+                    : Stack(
+                        alignment: Alignment.center,
+                        key: const ValueKey('mic'),
+                        children: [
+                          ScaleTransition(
+                            scale: _micScaleAnimation,
+                            child: Material(
+                              color: _isRecording
+                                  ? Colors.red
+                                  : const Color(0xFF128C7E),
+                              shape: const CircleBorder(),
+                              child: InkWell(
+                                onTapDown: (_) => _handleMicPress(),
+                                customBorder: const CircleBorder(),
+                                child: Container(
+                                  padding: const EdgeInsets.all(12),
+                                  child: Icon(
+                                    _isRecording ? Icons.mic : Icons.mic_none,
+                                    color: Colors.white,
+                                    size: 22,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          if (_isRecording)
+                            Positioned.fill(
+                              child: VoiceRecorder(
+                                onStop: (audioPath) {
+                                  setState(() {
+                                    _isRecording = false;
+                                    _hasText = widget.messageController.text
+                                        .trim()
+                                        .isNotEmpty;
+                                  });
+                                  _micController.reverse();
+                                  if (widget.onVoiceRecordStop != null &&
+                                      audioPath.isNotEmpty) {
+                                    widget.onVoiceRecordStop!(audioPath);
+                                  }
+                                },
+                              ),
+                            ),
+                        ],
                       ),
-                    ),
-                    if (_isRecording)
-                      Positioned.fill(
-                        child: VoiceRecorder(
-                          onStop: (audioPath) {
-                            setState(() {
-                              _isRecording = false;
-                              _hasText = widget.messageController.text.trim().isNotEmpty;
-                            });
-                            _micController.reverse();
-                            if (widget.onVoiceRecordStop != null && audioPath.isNotEmpty) {
-                              widget.onVoiceRecordStop!(audioPath);
-                            }
-                          },
-                        ),
-                      ),
-                  ],
-                ),
               ),
             ],
           ),
@@ -1715,6 +1817,7 @@ class _ChatInputBarState extends State<ChatInputBar> with SingleTickerProviderSt
     );
   }
 }
+
 class ShareContentPopup extends StatelessWidget {
   final VoidCallback onCameraPressed;
   final VoidCallback onDocumentPressed;
@@ -1732,12 +1835,12 @@ class ShareContentPopup extends StatelessWidget {
   });
 
   Widget _buildOption(
-      BuildContext context,
-      String imagePath,
-      String title,
-      String subtitle,
-      VoidCallback onTap,
-      ) {
+    BuildContext context,
+    String imagePath,
+    String title,
+    String subtitle,
+    VoidCallback onTap,
+  ) {
     return ListTile(
       leading: CircleAvatar(
         backgroundColor: const Color(0xFFF2F8F7),
@@ -1745,7 +1848,11 @@ class ShareContentPopup extends StatelessWidget {
       ),
       title: Text(
         title,
-        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, fontFamily: 'caros'),
+        style: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.bold,
+          fontFamily: 'caros',
+        ),
       ),
       subtitle: Text(subtitle),
       onTap: onTap,
@@ -1773,7 +1880,11 @@ class ShareContentPopup extends StatelessWidget {
                   const Center(
                     child: Text(
                       "Share Content",
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, fontFamily: 'caros'),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        fontFamily: 'caros',
+                      ),
                     ),
                   ),
                 ],
@@ -1798,7 +1909,7 @@ class ShareContentPopup extends StatelessWidget {
                 'assets/images/chartIcon.png',
                 "Create a poll",
                 "Create a poll for any query",
-                    () => Navigator.pop(context),
+                () => Navigator.pop(context),
               ),
               _buildOption(
                 context,
