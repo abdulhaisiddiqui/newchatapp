@@ -3,6 +3,7 @@ import 'package:chatapp/model/message_type.dart';
 import 'package:chatapp/model/file_attachment.dart';
 
 class Message {
+  final String? id;
   final String senderId;
   final String senderEmail;
   final String receiverId;
@@ -18,6 +19,7 @@ class Message {
   final bool isRead;
 
   Message({
+    this.id,
     required this.senderId,
     required this.senderEmail,
     required this.receiverId,
@@ -34,6 +36,7 @@ class Message {
   // Convert to a map for Firestore
   Map<String, dynamic> toMap() {
     return {
+      'id': id,
       'senderId': senderId,
       'senderEmail': senderEmail,
       'receiverId': receiverId,
@@ -62,6 +65,7 @@ class Message {
     }
 
     return Message(
+      id: map['id'],
       senderId: map['senderId'] ?? '',
       senderEmail: map['senderEmail'] ?? '',
       receiverId: map['receiverId'] ?? '',
@@ -85,6 +89,7 @@ class Message {
 
   // Copy with method for updates
   Message copyWith({
+    String? id,
     String? senderId,
     String? senderEmail,
     String? receiverId,
@@ -98,6 +103,7 @@ class Message {
     bool? isRead,
   }) {
     return Message(
+      id: id ?? this.id,
       senderId: senderId ?? this.senderId,
       senderEmail: senderEmail ?? this.senderEmail,
       receiverId: receiverId ?? this.receiverId,
@@ -117,13 +123,14 @@ class Message {
     final messagePreview = message.isNotEmpty && message.length > 50
         ? '${message.substring(0, 50)}...'
         : message;
-    return 'Message(senderId: $senderId, type: ${type.displayName}, hasFile: $hasFileAttachment, message: $messagePreview)';
+    return 'Message(id: $id, senderId: $senderId, type: ${type.displayName}, hasFile: $hasFileAttachment, message: $messagePreview)';
   }
 
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
     return other is Message &&
+        other.id == id &&
         other.senderId == senderId &&
         other.receiverId == receiverId &&
         other.timestamp == timestamp;
@@ -131,5 +138,5 @@ class Message {
 
   @override
   int get hashCode =>
-      senderId.hashCode ^ receiverId.hashCode ^ timestamp.hashCode;
+      id.hashCode ^ senderId.hashCode ^ receiverId.hashCode ^ timestamp.hashCode;
 }

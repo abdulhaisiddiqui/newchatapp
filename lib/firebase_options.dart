@@ -48,27 +48,33 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyB5vPtF80YreLTjnxj2DYuQ9gyZVR3f-Yk',
-    appId: '1:93624205799:android:3920f77b4c567fdeb53d42',
+    appId: '1:93624205799:android:e18ade58a3d9b8e1b53d42',
     messagingSenderId: '93624205799',
     projectId: 'baby-shop-hub-a04d1',
+    databaseURL: 'https://baby-shop-hub-a04d1-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'baby-shop-hub-a04d1.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyB5vPtF80YreLTjnxj2DYuQ9gyZVR3f-Yk',
-    appId: '1:93624205799:ios:3920f77b4c567fdeb53d42',
+    apiKey: 'AIzaSyDqsjadonzq_NDwUHAwiHQGSLXAPnBIQpQ',
+    appId: '1:93624205799:ios:5094990b57ae70fbb53d42',
     messagingSenderId: '93624205799',
     projectId: 'baby-shop-hub-a04d1',
+    databaseURL: 'https://baby-shop-hub-a04d1-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'baby-shop-hub-a04d1.firebasestorage.app',
+    iosClientId: '93624205799-ld1c59qkkjr725q57uampcoht8gfeqm2.apps.googleusercontent.com',
     iosBundleId: 'com.example.chatapp',
   );
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyB5vPtF80YreLTjnxj2DYuQ9gyZVR3f-Yk',
-    appId: '1:93624205799:web:3920f77b4c567fdeb53d42',
+    apiKey: 'AIzaSyCx7LoQOJBFcfTGZTJzrwtZ028l9OjaxRg',
+    appId: '1:93624205799:web:0ae34408276fd2bfb53d42',
     messagingSenderId: '93624205799',
     projectId: 'baby-shop-hub-a04d1',
-    storageBucket: 'baby-shop-hub-a04d1.firebasestorage.app',
     authDomain: 'baby-shop-hub-a04d1.firebaseapp.com',
+    databaseURL: 'https://baby-shop-hub-a04d1-default-rtdb.asia-southeast1.firebasedatabase.app',
+    storageBucket: 'baby-shop-hub-a04d1.firebasestorage.app',
+    measurementId: 'G-MCFEH1ZVB9',
   );
+
 }

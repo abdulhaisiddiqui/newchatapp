@@ -442,47 +442,61 @@ class ChatService extends ChangeNotifier {
       if (!userDoc.exists) return;
 
       List<dynamic> tokens = userDoc['fcmTokens'] ?? [];
-      if (tokens.isEmpty) return;
+      if (tokens.isEmpty) {
+        debugPrint('No FCM tokens found for receiver: $receiverId');
+        return;
+      }
 
-      // FCM Server Key - Get this from Firebase Console > Project Settings > Cloud Messaging > Server Key
-      const String serverKey =
-          'YOUR_FCM_SERVER_KEY_HERE'; // Replace with actual server key
+      // FCM Server Key - TODO: Configure in Firebase Console > Project Settings > Cloud Messaging
+      // For development, notifications will fall back to local notifications
+      const String serverKey = ''; // Will be configured in production
 
+      if (serverKey.isEmpty) {
+        debugPrint('FCM Server Key not configured - local notifications only');
+        return;
+      }
+
+      final currentUser = _firebaseAuth.currentUser;
       for (String token in tokens) {
-        final response = await http.post(
-          Uri.parse('https://fcm.googleapis.com/fcm/send'),
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'key=$serverKey',
-          },
-          body: jsonEncode({
-            'to': token,
-            'notification': {
-              'title': 'New Message',
-              'body': message.length > 100
-                  ? '${message.substring(0, 100)}...'
-                  : message,
-              'sound': 'default',
-              'badge': '1',
+        try {
+          final response = await http.post(
+            Uri.parse('https://fcm.googleapis.com/fcm/send'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'key=$serverKey',
             },
-            'data': {
-              'click_action': 'FLUTTER_NOTIFICATION_CLICK',
-              'message_type': 'chat_message',
-              'sender_id': _firebaseAuth.currentUser?.uid ?? '',
-              'receiver_id': receiverId,
-            },
-            'priority': 'high',
-          }),
-        );
+            body: jsonEncode({
+              'to': token,
+              'notification': {
+                'title': 'New Message',
+                'body': message.length > 100
+                    ? '${message.substring(0, 100)}...'
+                    : message,
+                'sound': 'default',
+                'badge': '1',
+              },
+              'data': {
+                'click_action': 'FLUTTER_NOTIFICATION_CLICK',
+                'message_type': 'chat_message',
+                'sender_id': currentUser?.uid ?? '',
+                'sender_email': currentUser?.email ?? '',
+                'receiver_id': receiverId,
+              },
+              'priority': 'high',
+            }),
+          );
 
-        if (response.statusCode == 200) {
-          debugPrint('Push notification sent successfully to $token');
-        } else {
-          debugPrint('Failed to send push notification: ${response.body}');
+          if (response.statusCode == 200) {
+            debugPrint('✓ Push notification sent successfully to $token');
+          } else {
+            debugPrint('✗ Failed to send push notification: ${response.body}');
+          }
+        } catch (tokenError) {
+          debugPrint('✗ Error sending notification to token $token: $tokenError');
         }
       }
     } catch (e) {
-      debugPrint("Failed to send notification: $e");
+      debugPrint("✗ Failed to send notification: $e");
     }
   }
 

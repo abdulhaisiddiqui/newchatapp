@@ -41,18 +41,16 @@ const AndroidNotificationChannel channel = AndroidNotificationChannel(
 );
 
 Future<void> main() async {
+  // Ensure Flutter binding is initialized before doing any async setup (including Sentry)
+  WidgetsFlutterBinding.ensureInitialized();
+
   await SentryFlutter.init(
     (options) {
       options.dsn =
           'https://45d6ea8ba3eeadf9b5edd43d4d296f7a@o4510137199951872.ingest.de.sentry.io/4510137202638928';
-      // Set tracesSampleRate to 1.0 to capture 100% of transactions for tracing.
-      // We recommend adjusting this value in production.
       options.tracesSampleRate = 1.0;
     },
     appRunner: () async {
-      // Ensure Flutter binding is initialized in the same zone as runApp
-      WidgetsFlutterBinding.ensureInitialized();
-
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       );
@@ -169,7 +167,8 @@ Future<void> main() async {
 
       await flutterLocalNotificationsPlugin.initialize(
         initSettings,
-        onDidReceiveNotificationResponse: (payload) {
+        // Fix callback signature to match the plugin: NotificationResponse
+        onDidReceiveNotificationResponse: (NotificationResponse response) {
           // handle tap
         },
       );
@@ -184,12 +183,11 @@ Future<void> main() async {
       // TODO: Remove this line after sending the first sample event to sentry.
       await Sentry.captureException(Exception('This is a sample exception.'));
 
+      // Simplify runApp: do not rely on SentryWidget symbol (can be missing)
       runApp(
-        SentryWidget(
-          child: ChangeNotifierProvider(
-            create: (context) => AuthService(),
-            child: const MyApp(),
-          ),
+        ChangeNotifierProvider(
+          create: (context) => AuthService(),
+          child: const MyApp(),
         ),
       );
     },
@@ -244,19 +242,14 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   Future<void> _initNotificationsAndPermissions() async {
     // ------------- WEB -------------
     if (kIsWeb) {
-      // On web we must ensure service-worker exists (web/firebase-messaging-sw.js)
-      // and request permission using the firebase_messaging API.
       try {
         NotificationSettings settings = await FirebaseMessaging.instance
             .requestPermission(alert: true, badge: true, sound: true);
         print('Web notification permission: ${settings.authorizationStatus}');
 
-        // Get a token for web (supply your VAPID key)
-        // TODO: Replace with your actual VAPID key from Firebase Console → Project Settings → Cloud Messaging → Web Push certificates
-        final token = await FirebaseMessaging.instance.getToken(
-          vapidKey:
-              null, // Set to null to avoid the error until you add your VAPID key
-        );
+        // Get a token for web (supply your VAPID key if you have one)
+        // Remove passing null explicitly (can cause type issues). Omit vapidKey if you don't have one.
+        final token = await FirebaseMessaging.instance.getToken();
         print('FCM web token: $token');
         _token = token;
         if (token != null) {
@@ -266,7 +259,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               'fcmTokens': FieldValue.arrayUnion([token]),
             }, SetOptions(merge: true));
 
-            // Save FCM token to secure storage
             await SecureStorageService().saveFCMToken(token);
           }
         }
@@ -279,7 +271,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               'fcmTokens': FieldValue.arrayUnion([newToken]),
             }, SetOptions(merge: true));
 
-            // Update FCM token in secure storage
             await SecureStorageService().saveFCMToken(newToken);
           }
         });

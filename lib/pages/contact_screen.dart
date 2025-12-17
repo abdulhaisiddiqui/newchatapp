@@ -1,6 +1,8 @@
+import 'package:chatapp/pages/add_contact_screen.dart';
 import 'package:chatapp/pages/chat_page_chatview.dart';
 import 'package:chatapp/pages/profile_screen.dart';
 import 'package:chatapp/services/chat/chat_service.dart';
+import 'package:chatapp/services/user/contact_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -16,6 +18,7 @@ class ContactScreen extends StatefulWidget {
 
 class _ContactScreenState extends State<ContactScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final ContactService _contactService = ContactService();
   final Set<String> _selectedUsers = {};
 
   void _createGroupChat() async {
@@ -111,9 +114,14 @@ class _ContactScreenState extends State<ContactScreen> {
                 Positioned(
                   left: 10,
                   child: IconButton(
-                    icon: const Icon(Icons.search, color: Colors.white),
+                    icon: const Icon(Icons.person_add, color: Colors.white),
                     onPressed: () {
-                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const AddContactScreen(),
+                        ),
+                      );
                     },
                   ),
                 ),
@@ -193,22 +201,46 @@ class _ContactScreenState extends State<ContactScreen> {
   }
 
   Widget _buildUserList() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('users').snapshots(),
-      builder: (context, snapshots) {
-        if (snapshots.hasError) {
-          return Center(child: const Text('Error'));
+    return StreamBuilder<List<String>>(
+      stream: _contactService.getContacts(),
+      builder: (context, contactSnapshot) {
+        if (contactSnapshot.hasError) {
+          return const Center(child: Text('Error loading contacts'));
         }
 
-        if (snapshots.connectionState == ConnectionState.waiting) {
-          return Center(child: Text('loading'));
+        if (contactSnapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
         }
 
-        return ListView(
-          padding: EdgeInsets.only(top: 20),
-          children: snapshots.data!.docs
-              .map<Widget>((doc) => _buildUserListItem(doc))
-              .toList(),
+        final contactIds = contactSnapshot.data ?? [];
+
+        if (contactIds.isEmpty) {
+          return const Center(
+            child: Text('No contacts yet. Add some friends!'),
+          );
+        }
+
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('users')
+              .where(FieldPath.documentId, whereIn: contactIds)
+              .snapshots(),
+          builder: (context, userSnapshot) {
+            if (userSnapshot.hasError) {
+              return const Center(child: Text('Error loading users'));
+            }
+
+            if (userSnapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            return ListView(
+              padding: const EdgeInsets.only(top: 20),
+              children: userSnapshot.data!.docs
+                  .map<Widget>((doc) => _buildUserListItem(doc))
+                  .toList(),
+            );
+          },
         );
       },
     );
@@ -218,12 +250,10 @@ class _ContactScreenState extends State<ContactScreen> {
     final data = document.data() as Map<String, dynamic>?;
     if (data == null) return const SizedBox.shrink();
 
-    final currentUserEmail = _auth.currentUser?.email;
     final userEmail = data['email'] as String?;
     final userUid = data['uid'] as String?;
 
-    // Skip current user and invalid entries
-    if (currentUserEmail == userEmail || userEmail == null || userUid == null) {
+    if (userEmail == null || userUid == null) {
       return const SizedBox.shrink();
     }
 
@@ -233,6 +263,29 @@ class _ContactScreenState extends State<ContactScreen> {
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
       child: Slidable(
         key: ValueKey(userUid),
+        endActionPane: ActionPane(
+          motion: const ScrollMotion(),
+          children: [
+            SlidableAction(
+              onPressed: (context) async {
+                try {
+                  await _contactService.removeContact(userUid);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Removed $userEmail from contacts')),
+                  );
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to remove contact: $e')),
+                  );
+                }
+              },
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              icon: Icons.delete,
+              label: 'Remove',
+            ),
+          ],
+        ),
         child: ListTile(
           onTap: _selectedUsers.isNotEmpty
               ? () {

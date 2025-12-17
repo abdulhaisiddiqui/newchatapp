@@ -46,6 +46,8 @@ class _ChatPageChatViewState extends State<ChatPageChatView> {
   double _uploadProgress = 0.0;
   String? _statusMessage;
   bool _isRecording = false;
+  bool _isSendingMessage = false;
+  StreamSubscription? _messagesSubscription;
 
   @override
   void initState() {
@@ -57,6 +59,13 @@ class _ChatPageChatViewState extends State<ChatPageChatView> {
         _connectionStatus = status;
       });
     });
+  }
+
+  @override
+  void dispose() {
+    _messagesSubscription?.cancel();
+    chatController.dispose();
+    super.dispose();
   }
 
   void _initializeChat() {
@@ -80,15 +89,52 @@ class _ChatPageChatViewState extends State<ChatPageChatView> {
       otherUsers: [otherUser],
     );
 
-    _loadMessages();
+    _setupRealtimeMessageListener();
+    _markMessagesAsRead();
+  }
+
+  void _setupRealtimeMessageListener() {
+    // Listen to messages stream in real-time
+    _messagesSubscription = _chatService
+        .getMessagesStream(currentUser.id, otherUser.id)
+        .listen(
+          (messages) {
+            debugPrint('📨 Received ${messages.length} messages from stream');
+
+            if (!mounted) return;
+
+            final chatViewMessages = _convertMessagesToChatView(messages);
+            chatController.loadMoreData(chatViewMessages);
+          },
+          onError: (error) {
+            debugPrint('❌ Error listening to messages: $error');
+            _showErrorSnackBar('Failed to load messages: $error');
+          },
+        );
   }
 
   void _loadMessages() async {
-    final messages = await _chatService
-        .getMessagesStream(currentUser.id, otherUser.id)
-        .first;
+    try {
+      final messages = await _chatService
+          .getMessagesStream(currentUser.id, otherUser.id)
+          .first;
 
-    final chatViewMessages = messages.map((msg) {
+      debugPrint('📨 Loaded ${messages.length} initial messages');
+      final chatViewMessages = _convertMessagesToChatView(messages);
+
+      if (mounted) {
+        chatController.loadMoreData(chatViewMessages);
+      }
+    } catch (e) {
+      debugPrint('❌ Error loading messages: $e');
+      if (mounted) {
+        _showErrorSnackBar('Failed to load messages: $e');
+      }
+    }
+  }
+
+  List<Message> _convertMessagesToChatView(List<dynamic> messages) {
+    return messages.map((msg) {
       // For file messages, create CustomMessage with proper data
       if (msg.hasFileAttachment && msg.fileAttachment != null) {
         final fileAttachment = msg.fileAttachment!;
@@ -137,8 +183,16 @@ class _ChatPageChatViewState extends State<ChatPageChatView> {
         return customMessage.toChatViewMessage();
       }
     }).toList();
+  }
 
-    chatController.loadMoreData(chatViewMessages);
+  void _markMessagesAsRead() async {
+    try {
+      final chatRoomId = _getChatRoomId();
+      await _chatService.markMessagesAsRead(chatRoomId, currentUser.id);
+      debugPrint('✓ Marked messages as read for chat room: $chatRoomId');
+    } catch (e) {
+      debugPrint('✗ Error marking messages as read: $e');
+    }
   }
 
   void _handleVoiceRecording(String audioPath) {
@@ -229,23 +283,6 @@ class _ChatPageChatViewState extends State<ChatPageChatView> {
             fileAttachment: fileAttachment,
             textMessage: '', // No text for voice messages
           );
-
-          // Add to chat view
-          final customMessage = CustomMessage(
-            id: DateTime.now().millisecondsSinceEpoch.toString(),
-            message: 'Voice message',
-            sender: currentUser,
-            createdAt: DateTime.now(),
-            customType: CustomMessageType.voice,
-            extraData: {
-              'fileId': fileAttachment.fileId,
-              'fileName': fileAttachment.fileName,
-              'fileSize': fileAttachment.fileSizeBytes,
-              'duration': 0, // You might want to calculate actual duration
-            },
-          );
-
-          chatController.addMessage(customMessage.toChatViewMessage());
         } else {
           _showErrorSnackBar('Failed to get voice message metadata');
         }
@@ -537,6 +574,31 @@ class _ChatPageChatViewState extends State<ChatPageChatView> {
                 ],
               ),
             ),
+            if (_isSendingMessage)
+              Positioned(
+                bottom: 80,
+                left: 0,
+                right: 0,
+                child: Container(
+                  color: Colors.white.withOpacity(0.9),
+                  padding: const EdgeInsets.all(8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Sending message...',
+                        style: TextStyle(color: Colors.black),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -548,6 +610,13 @@ class _ChatPageChatViewState extends State<ChatPageChatView> {
     ReplyMessage replyMessage,
     MessageType messageType,
   ) {
+    if (message.trim().isEmpty) {
+      _showErrorSnackBar('Cannot send empty message');
+      return;
+    }
+
+    setState(() => _isSendingMessage = true);
+
     final newMessage = Message(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       message: message,
@@ -557,19 +626,48 @@ class _ChatPageChatViewState extends State<ChatPageChatView> {
       replyMessage: replyMessage,
     );
 
-    chatController.addMessage(newMessage);
+    debugPrint(
+      '📤 Sending message to ${widget.receiverUserEmail} (ID: ${widget.receiverUserId})',
+    );
+    debugPrint(
+      '📨 Message: ${message.length} chars, Reply: ${replyMessage.message.isNotEmpty}',
+    );
 
     // Send to Firebase - handle reply messages
     if (replyMessage.message.isNotEmpty) {
       // This is a reply message
-      _chatService.sendReplyMessage(
-        receiverId: widget.receiverUserId,
-        message: message,
-        replyToMessageId: replyMessage.messageId,
-      );
+      debugPrint('↩️ Sending reply message to: ${replyMessage.messageId}');
+      _chatService
+          .sendReplyMessage(
+            receiverId: widget.receiverUserId,
+            message: message,
+            replyToMessageId: replyMessage.messageId,
+          )
+          .then((_) {
+            setState(() => _isSendingMessage = false);
+            debugPrint('✓ Reply message sent successfully');
+          })
+          .catchError((e) {
+            setState(() => _isSendingMessage = false);
+            debugPrint('✗ Failed to send reply message: $e');
+            _showErrorSnackBar('Failed to send reply: $e');
+          });
     } else {
       // Regular message
-      _chatService.sendMessage(widget.receiverUserId, message);
+      debugPrint('💬 Sending regular text message');
+      _chatService
+          .sendMessage(widget.receiverUserId, message)
+          .then((_) {
+            setState(() => _isSendingMessage = false);
+            debugPrint(
+              '✓ Message sent successfully to ${widget.receiverUserEmail}',
+            );
+          })
+          .catchError((e) {
+            setState(() => _isSendingMessage = false);
+            debugPrint('✗ Failed to send message: $e');
+            _showErrorSnackBar('Failed to send message: $e');
+          });
     }
   }
 
@@ -598,22 +696,6 @@ class _ChatPageChatViewState extends State<ChatPageChatView> {
             latitude: latitude,
             longitude: longitude,
           );
-
-          // Add to chat view
-          final customMessage = CustomMessage(
-            id: DateTime.now().millisecondsSinceEpoch.toString(),
-            message: 'Shared location',
-            sender: currentUser,
-            createdAt: DateTime.now(),
-            customType: CustomMessageType.location,
-            extraData: {
-              'lat': latitude,
-              'lng': longitude,
-              'address': 'Shared location',
-            },
-          );
-
-          chatController.addMessage(customMessage.toChatViewMessage());
         }
       }
     } catch (e) {
@@ -646,18 +728,6 @@ class _ChatPageChatViewState extends State<ChatPageChatView> {
             contactName: name,
             contactPhone: phone,
           );
-
-          // Add to chat view
-          final customMessage = CustomMessage(
-            id: DateTime.now().millisecondsSinceEpoch.toString(),
-            message: 'Shared contact: $name',
-            sender: currentUser,
-            createdAt: DateTime.now(),
-            customType: CustomMessageType.contact,
-            extraData: {'name': name, 'phone': phone},
-          );
-
-          chatController.addMessage(customMessage.toChatViewMessage());
         }
       }
     } catch (e) {
@@ -706,40 +776,6 @@ class _ChatPageChatViewState extends State<ChatPageChatView> {
                       receiverId: widget.receiverUserId,
                       fileAttachment: fileAttachment,
                       textMessage: '',
-                    );
-
-                    // Determine the appropriate custom message type based on file
-                    CustomMessageType messageType;
-                    if (fileAttachment.isImage) {
-                      messageType = CustomMessageType.image;
-                    } else if (fileAttachment.isVideo) {
-                      messageType = CustomMessageType
-                          .document; // Videos as documents for now
-                    } else if (fileAttachment.isAudio) {
-                      messageType = CustomMessageType.voice;
-                    } else {
-                      messageType = CustomMessageType.document;
-                    }
-
-                    // Add to chat view
-                    final customMessage = CustomMessage(
-                      id: DateTime.now().millisecondsSinceEpoch.toString(),
-                      message: messageType == CustomMessageType.image
-                          ? 'Sent image: ${fileAttachment.originalFileName}'
-                          : 'Sent file: ${fileAttachment.originalFileName}',
-                      sender: currentUser,
-                      createdAt: DateTime.now(),
-                      customType: messageType,
-                      extraData: {
-                        'fileId': fileAttachment.fileId,
-                        'fileName': fileAttachment.originalFileName,
-                        'fileSize': fileAttachment.fileSizeBytes,
-                        'downloadUrl': fileAttachment.downloadUrl,
-                      },
-                    );
-
-                    chatController.addMessage(
-                      customMessage.toChatViewMessage(),
                     );
                   } else {
                     _showErrorSnackBar('Failed to get file information');
