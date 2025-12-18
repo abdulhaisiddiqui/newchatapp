@@ -209,6 +209,231 @@ Once you have your API running locally, common next steps include:
 
 ---
 
+## 💾 Databases
+
+### 🐍 Python (FastAPI with SQLAlchemy)
+
+```python
+from fastapi import FastAPI, Depends
+from sqlalchemy import create_engine, Column, Integer, String
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session
+
+DATABASE_URL = "postgresql://user:password@localhost/dbname"
+
+Base = declarative_base()
+
+class Item(Base):
+    __tablename__ = "items"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    description = Column(String, index=True)
+
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+app = FastAPI()
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+@app.get("/items/{item_id}")
+def read_item(item_id: int, db: Session = Depends(get_db)):
+    return db.query(Item).filter(Item.id == item_id).first()
+```
+
+### 🟨 JavaScript (Express with Sequelize)
+
+```javascript
+const { Sequelize, DataTypes } = require('sequelize');
+const sequelize = new Sequelize('postgres://user:password@localhost:5432/dbname');
+
+const Item = sequelize.define('Item', {
+  name: DataTypes.STRING,
+  description: DataTypes.STRING,
+});
+
+app.get('/items/:id', async (req, res) => {
+  const item = await Item.findByPk(req.params.id);
+  res.json(item);
+});
+```
+
+### 🟩 Go (with pgx)
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+
+	"github.com/jackc/pgx/v4"
+)
+
+func main() {
+	conn, err := pgx.Connect(context.Background(), os.Getenv("DATABASE_URL"))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
+		os.Exit(1)
+	}
+	defer conn.Close(context.Background())
+
+	var name string
+	var description string
+	err = conn.QueryRow(context.Background(), "select name, description from items where id=$1", 1).Scan(&name, &description)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println(name, description)
+}
+```
+
+### 🟦 Dart (with postgres)
+
+```dart
+import 'package:postgres/postgres.dart';
+
+void main() async {
+  final conn = PostgreSQLConnection("localhost", 5432, "dbname", username: "user", password: "password");
+  await conn.open();
+
+  List<List<dynamic>> results = await conn.query("SELECT name, description FROM items WHERE id = @id", substitutionValues: {
+    "id": 1
+  });
+
+  for (final row in results) {
+    print(row[0]);
+    print(row[1]);
+  }
+
+  await conn.close();
+}
+```
+
+---
+
+## 🔐 Authentication (JWT)
+
+### 🐍 Python (FastAPI)
+
+```python
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.security import OAuth2PasswordBearer
+import jwt
+
+SECRET_KEY = "your-secret-key"
+ALGORITHM = "HS256"
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+        return username
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+
+@app.get("/users/me")
+async def read_users_me(current_user: str = Depends(get_current_user)):
+    return {"username": current_user}
+```
+
+### 🟨 JavaScript (Express)
+
+```javascript
+const jwt = require('jsonwebtoken');
+
+function auth(req, res, next) {
+  const token = req.header('x-auth-token');
+  if (!token) return res.status(401).send('Access denied. No token provided.');
+
+  try {
+    const decoded = jwt.verify(token, 'your-secret-key');
+    req.user = decoded;
+    next();
+  } catch (ex) {
+    res.status(400).send('Invalid token.');
+  }
+}
+
+app.get('/api/me', auth, (req, res) => {
+  res.send(req.user);
+});
+```
+
+### 🟩 Go (Gin)
+
+```go
+func authMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		tokenString := c.GetHeader("Authorization")
+		if tokenString == "" {
+			c.JSON(401, gin.H{"error": "request does not contain an access token"})
+			c.Abort()
+			return
+		}
+		// Validate token
+		c.Next()
+	}
+}
+
+r.GET("/protected", authMiddleware(), func(c *gin.Context) {
+    c.JSON(200, gin.H{"message": "hello world"})
+})
+```
+
+### 🟦 Dart (Shelf)
+
+```dart
+import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
+
+Middleware-based authentication would be implemented here.
+```
+
+
+---
+
+## ⚖️ REST vs GraphQL
+
+### REST
+
+-   **Architecture:** Client-server architecture where clients send requests to servers to retrieve or modify resources.
+-   **Endpoints:** Multiple endpoints for different resources (e.g., `/users`, `/posts`).
+-   **Data Fetching:** Over-fetching or under-fetching of data is common.
+-   **Example:**
+    -   `GET /users/1` - get user with id 1
+    -   `GET /users/1/posts` - get posts for user with id 1
+
+### GraphQL
+
+-   **Architecture:** A query language for APIs and a runtime for fulfilling those queries with your existing data.
+-   **Endpoints:** Single endpoint for all queries.
+-   **Data Fetching:** Clients can request exactly the data they need.
+-   **Example:**
+    ```graphql
+    query {
+      user(id: 1) {
+        name
+        posts {
+          title
+        }
+      }
+    }
+    ```
+
+---
+
 ## 🧠 Additional Notes & Best Practices
 
 ### 📌 Testing

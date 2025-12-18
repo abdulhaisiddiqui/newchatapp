@@ -1,6 +1,7 @@
 import 'package:chatapp/pages/chat_page_chatview.dart';
 import 'package:chatapp/pages/create_group_page.dart';
 import 'package:chatapp/pages/group_chat_page.dart';
+import 'package:chatapp/pages/search_screen.dart';
 import 'package:chatapp/pages/setting_screen2.dart';
 import 'package:chatapp/pages/story_upload_page.dart';
 import 'package:chatapp/services/auth/auth_service.dart';
@@ -13,7 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:material_floating_search_bar_2/material_floating_search_bar_2.dart';
+import 'package:flutter_typeahead/flutter_typeahead.dart';
 
 import '../components/user_status_indicator.dart';
 import '../services/chat/chat_service.dart';
@@ -28,13 +29,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  bool _isSearchOpen = false;
-  final FloatingSearchBarController _searchBarController = FloatingSearchBarController();
-
-
   final FirebaseAuth _auth = FirebaseAuth.instance;
-
-  List<Map<String, dynamic>> filteredUsers = [];
 
   @override
   void initState() {
@@ -42,7 +37,6 @@ class _HomePageState extends State<HomePage> {
     // Start monitoring online presence
     UserStatusService().initializePresenceMonitoring();
   }
-
 
   @override
   void dispose() {
@@ -94,19 +88,14 @@ class _HomePageState extends State<HomePage> {
                       IconButton(
                         icon: const Icon(Icons.search, color: Colors.white),
                         onPressed: () {
-                          setState(() {
-                            _isSearchOpen = !_isSearchOpen;
-                          });
-
-                          // Open / close via controller
-                          if (_isSearchOpen) {
-                            _searchBarController.open();
-                          } else {
-                            _searchBarController.close();
-                          }
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const SearchScreen(),
+                            ),
+                          );
                         },
                       ),
-
 
                       // 🏠 Title
                       const Text(
@@ -167,10 +156,12 @@ class _HomePageState extends State<HomePage> {
                                   radius: 20,
                                   backgroundImage: imageUrl.isNotEmpty
                                       ? NetworkImage(imageUrl)
-                                      : const AssetImage('assets/images/user.png') as ImageProvider,
+                                      : const AssetImage(
+                                              'assets/images/user.png',
+                                            )
+                                            as ImageProvider,
                                 ),
-                              )
-                              ;
+                              );
                             },
                           ),
                         ],
@@ -281,47 +272,7 @@ class _HomePageState extends State<HomePage> {
               ),
             ],
           ),
-          // 👇 Search bar overlay
-          if (_isSearchOpen)
-            Positioned(
-              top: 56, // AppBar ke neeche
-              left: 0,
-              right: 0,
-              child:
-              FloatingSearchBar(
-                controller: _searchBarController,
-                width: MediaQuery.of(context).size.width, // screen width
-                axisAlignment: 0.0,
-                openAxisAlignment: 0.0,
-                debounceDelay: const Duration(milliseconds: 300),
-                hint: 'Search users and groups...',
-                builder: (context, transition) {
-                  return Container(
-                    height: 200,
-                    color: const Color(0xFF1A1A1A),
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: filteredUsers.length,
-                      itemBuilder: (context, index) {
-                        final user = filteredUsers[index];
-                        return ListTile(
-                          leading: CircleAvatar(
-                            backgroundImage: (user['profilePic'] ?? '').isNotEmpty
-                                ? NetworkImage(user['profilePic'])
-                                : const AssetImage('assets/images/user.png') as ImageProvider,
-                          ),
-                          title: Text(user['username'] ?? '', style: const TextStyle(color: Colors.white)),
-                        );
-                      },
-                    ),
-                  );
-                },
-              )
-
-            ),
-
         ],
-
       ),
       floatingActionButton: Column(
         mainAxisAlignment: MainAxisAlignment.end,
@@ -331,7 +282,10 @@ class _HomePageState extends State<HomePage> {
             backgroundColor: const Color(0XFF24786D),
             onPressed: () {
               // Action for starting a new chat
-              Navigator.push(context, MaterialPageRoute(builder: (context)=>ContactScreen()));
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => ContactScreen()),
+              );
             },
             child: const Icon(Icons.chat, color: Colors.white),
             tooltip: 'New Chat',
@@ -342,7 +296,10 @@ class _HomePageState extends State<HomePage> {
             backgroundColor: const Color(0XFF20A065),
             onPressed: () {
               // Action for creating a group chat or another feature
-              Navigator.push(context, MaterialPageRoute(builder: (context)=>CreateGroupPage()));
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => CreateGroupPage()),
+              );
             },
             child: const Icon(Icons.group_add, color: Colors.white),
             tooltip: 'New Group',

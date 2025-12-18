@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:chatapp/pages/chat_page_chatview.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -10,6 +13,9 @@ class SearchScreen extends StatefulWidget {
 
 class _SearchScreenState extends State<SearchScreen> {
   final TextEditingController _searchController = TextEditingController();
+
+  List<Map<String, dynamic>> _searchResults = [];
+  bool _isLoading = false;
 
   // 🔹 TODO: Replace with actual Firestore/API data
   // Example: Stream<QuerySnapshot> or List fetched from backend
@@ -93,10 +99,8 @@ class _SearchScreenState extends State<SearchScreen> {
                                 ),
                               ),
                               style: const TextStyle(fontSize: 16),
-                              // 🔹 TODO: Implement search functionality
                               onChanged: (value) {
-                                // Filter people/groups based on search query
-                                // Example: _searchUsers(value);
+                                _searchUsers(value);
                               },
                             ),
                           ),
@@ -115,55 +119,41 @@ class _SearchScreenState extends State<SearchScreen> {
 
             // Results
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                children: [
-                  // People section
-                  const Text(
-                    "People",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : ListView(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      children: [
+                        if (_searchResults.isNotEmpty) ...[
+                          const Text(
+                            "People",
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          ..._searchResults.map((user) {
+                            return _buildPersonTile(
+                              name: user["username"] ?? '',
+                              status: user["email"] ?? '',
+                              avatar: user["profilePic"] ?? '',
+                              uid: user["uid"] ?? '',
+                            );
+                          }).toList(),
+                        ] else if (_searchController.text.isNotEmpty) ...[
+                          const Center(
+                            child: Text(
+                              "No users found",
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          ),
+                        ] else ...[
+                          // Show recent or something, but for now empty
+                        ],
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // 🔹 TODO: Replace with StreamBuilder or FutureBuilder
-                  // Example: StreamBuilder<QuerySnapshot>(...)
-                  ..._dummyPeople.map((person) {
-                    return _buildPersonTile(
-                      name: person["name"],
-                      status: person["status"],
-                      avatar: person["avatar"],
-                    );
-                  }).toList(),
-
-                  const SizedBox(height: 24),
-
-                  // Group Chat section
-                  const Text(
-                    "Group Chat",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // 🔹 TODO: Replace with StreamBuilder or FutureBuilder for groups
-                  ..._dummyGroups.map((group) {
-                    return _buildGroupTile(
-                      name: group["name"],
-                      participants: group["participants"],
-                      avatars: group["avatars"],
-                    );
-                  }).toList(),
-
-                  const SizedBox(height: 20),
-                ],
-              ),
             ),
           ],
         ),
@@ -175,11 +165,19 @@ class _SearchScreenState extends State<SearchScreen> {
     required String name,
     required String status,
     required String avatar,
+    required String uid,
   }) {
     return InkWell(
-      // 🔹 TODO: Navigate to chat or profile screen
       onTap: () {
-        // Navigator.push(context, MaterialPageRoute(...));
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatPageChatView(
+              receiverUserEmail: status,
+              receiverUserId: uid,
+            ),
+          ),
+        );
       },
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -341,31 +339,39 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
-  // 🔹 TODO: Implement backend search methods
-  /*
   Future<void> _searchUsers(String query) async {
     if (query.isEmpty) {
-      // Show all users or clear results
+      setState(() {
+        _searchResults = [];
+        _isLoading = false;
+      });
       return;
     }
-    
+
+    setState(() {
+      _isLoading = true;
+    });
+
     try {
       final result = await FirebaseFirestore.instance
           .collection('users')
           .where('username', isGreaterThanOrEqualTo: query)
           .where('username', isLessThanOrEqualTo: query + '\uf8ff')
           .get();
-      
+
       setState(() {
-        // Update your search results
+        _searchResults = result.docs.map((doc) {
+          final data = doc.data();
+          data['uid'] = doc.id;
+          return data;
+        }).toList();
+        _isLoading = false;
       });
     } catch (e) {
       debugPrint("Search error: $e");
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
-  
-  Future<void> _searchGroups(String query) async {
-    // Similar implementation for groups
-  }
-  */
 }

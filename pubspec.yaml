@@ -74,8 +74,7 @@ dependencies:
   flutter_contacts: ^1.1.7+1
   cached_network_image: ^3.4.1
   geocoding: ^3.0.0
-  material_floating_search_bar_2: ^0.5.0
-  flutter_typeahead: ^4.8.0
+  flutter_typeahead: ^5.2.0
   badges: ^3.1.2
   flutter_secure_storage: ^9.2.4
   awesome_notifications: ^0.10.1
@@ -90,6 +89,9 @@ dependencies:
   connectivity_plus: ^6.0.3
   chatview: ^2.5.0
   flutter_image_compress: ^2.0.4
+  flutter_keyboard_visibility: ^6.0.0
+
+
 
 dev_dependencies:
   sentry_dart_plugin: ^3.1.1
