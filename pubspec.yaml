@@ -57,7 +57,7 @@ dependencies:
   video_thumbnail: ^0.5.3
   image: ^4.1.3
   path: ^1.8.3
-  permission_handler: ^11.0.1
+  permission_handler: ^12.0.1
   http: ^1.1.0
   record: ^6.1.1
   just_audio: ^0.9.36
@@ -90,6 +90,7 @@ dependencies:
   chatview: ^2.5.0
   flutter_image_compress: ^2.0.4
   flutter_keyboard_visibility: ^6.0.0
+  flutter_contacts_service: ^0.0.3
 
 
 
